@@ -4166,6 +4166,12 @@ class DeepseekV2Model(Model):
             
             # Perform SVD on k_matrix
             U_k, S_k, Vh_k = torch.linalg.svd(k_matrix, full_matrices=False)
+            
+            # Debugging: Print cumulative variance explained in k_matrix
+            variance_explained_k = (S_k ** 2) / torch.sum(S_k ** 2)
+            cumulative_variance_explained_k = torch.cumsum(variance_explained_k, dim=0)
+            print(f"Variance explained in k for {name} by top {self.kv_lora_reduced_rank} components: {cumulative_variance_explained_k[self.kv_lora_reduced_rank - 1].item():.6f}")
+            
             S_k_sqrt = torch.sqrt(S_k[:self.kv_lora_reduced_rank])
             k_b_a_proj = torch.diag(S_k_sqrt) @ Vh_k[:self.kv_lora_reduced_rank, :]  # [256, 512]
             k_b_b_proj = U_k[:, :self.kv_lora_reduced_rank] @ torch.diag(S_k_sqrt)  # [16384, 256]
@@ -4174,6 +4180,12 @@ class DeepseekV2Model(Model):
             
             # Perform SVD on v_matrix
             U_v, S_v, Vh_v = torch.linalg.svd(v_matrix, full_matrices=False)
+            
+            # Debugging: Print cumulative variance explained in v_matrix
+            variance_explained_v = (S_v ** 2) / torch.sum(S_v ** 2)
+            cumulative_variance_explained_v = torch.cumsum(variance_explained_v, dim=0)
+            print(f"Variance explained in v for {name} by top {self.kv_lora_reduced_rank} components: {cumulative_variance_explained_v[self.kv_lora_reduced_rank - 1].item():.6f}")
+
             S_v_sqrt = torch.sqrt(S_v[:self.kv_lora_reduced_rank])
             v_b_a_proj = torch.diag(S_v_sqrt) @ Vh_v[:self.kv_lora_reduced_rank, :]  # [256, 512]
             v_b_b_proj = U_v[:, :self.kv_lora_reduced_rank] @ torch.diag(S_v_sqrt)  # [16384, 256]
