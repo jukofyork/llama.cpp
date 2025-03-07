@@ -2902,8 +2902,7 @@ bool llama_model::load_tensors(llama_model_loader & ml) {
                         layer.wk_b_a = create_tensor(tn(LLM_TENSOR_ATTN_K_B_A, "weight", i), {kv_lora_rank, kv_lora_reduced_rank}, 0);
                         layer.wk_b_b = create_tensor(tn(LLM_TENSOR_ATTN_K_B_B, "weight", i), {n_embd_head_qk_nope, kv_lora_reduced_rank, n_head}, 0);
 
-                        layer.wv_b_a = create_tensor(tn(LLM_TENSOR_ATTN_V_B_A, "weight", i), {kv_lora_rank, kv_lora_reduced_rank}, 0);
-                        layer.wv_b_b = create_tensor(tn(LLM_TENSOR_ATTN_V_B_B, "weight", i), {kv_lora_reduced_rank, n_embd_head_v, n_head}, 0);
+                        layer.wv_b = create_tensor(tn(LLM_TENSOR_ATTN_V_B, "weight", i), {kv_lora_rank, n_embd_head_v, n_head}, 0);
 
                         layer.wo = create_tensor(tn(LLM_TENSOR_ATTN_OUT, "weight", i), {n_head * n_embd_head_v, n_embd}, 0);
 
