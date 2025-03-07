@@ -4154,29 +4154,42 @@ class DeepseekV2Model(Model):
             assert data_torch.shape[0] == n_head_kv * (qk_nope_head_dim + v_head_dim)
             assert data_torch.shape[1] == kv_lora_rank
 
+            # Save the original data type
+            original_dtype = data_torch.dtype
+
             kv_b_proj = data_torch.view(n_head_kv, qk_nope_head_dim + v_head_dim, kv_lora_rank)
             k_b_proj, v_b_proj = torch.split(kv_b_proj, [qk_nope_head_dim, v_head_dim], dim=1)
             
-            k_matrix = k_b_proj.reshape(-1, kv_lora_rank)                                            # Flatten to (16384, 512)
+            # Flatten and cast to float32
+            k_matrix = k_b_proj.reshape(-1, kv_lora_rank).float()  # [16384, 512], cast to float32
+            v_matrix = v_b_proj.reshape(-1, kv_lora_rank).float()  # [16384, 512], cast to float32
+            
+            # Perform SVD on k_matrix
             U_k, S_k, Vh_k = torch.linalg.svd(k_matrix, full_matrices=False)
             S_k_sqrt = torch.sqrt(S_k[:self.kv_lora_reduced_rank])
-            k_b_a_proj = torch.diag(S_k_sqrt) @ Vh_k[:self.kv_lora_reduced_rank, :]                  # (256, 512)
-            k_b_b_proj = U_k[:, :self.kv_lora_reduced_rank] @ torch.diag(S_k_sqrt)                   # (16384, 256)
-            k_b_b_proj = k_b_b_proj.reshape(n_head_kv, qk_nope_head_dim, self.kv_lora_reduced_rank)  # (128, 128, 256)
-            k_b_b_proj = k_b_b_proj.transpose(1, 2)                                                  # (128, 256, 128)
+            k_b_a_proj = torch.diag(S_k_sqrt) @ Vh_k[:self.kv_lora_reduced_rank, :]  # [256, 512]
+            k_b_b_proj = U_k[:, :self.kv_lora_reduced_rank] @ torch.diag(S_k_sqrt)  # [16384, 256]
+            k_b_b_proj = k_b_b_proj.reshape(n_head_kv, qk_nope_head_dim, self.kv_lora_reduced_rank)  # [128, 128, 256]
+            k_b_b_proj = k_b_b_proj.transpose(1, 2)  # [128, 256, 128]
             
-            v_matrix = v_b_proj.reshape(-1, kv_lora_rank)                                            # Flatten to (16384, 512)
+            # Perform SVD on v_matrix
             U_v, S_v, Vh_v = torch.linalg.svd(v_matrix, full_matrices=False)
             S_v_sqrt = torch.sqrt(S_v[:self.kv_lora_reduced_rank])
-            v_b_a_proj = torch.diag(S_v_sqrt) @ Vh_v[:self.kv_lora_reduced_rank, :]                  # (256, 512)
-            v_b_b_proj = U_v[:, :self.kv_lora_reduced_rank] @ torch.diag(S_v_sqrt)                   # (16384, 256)
-            v_b_b_proj = v_b_b_proj.reshape(n_head_kv, v_head_dim, self.kv_lora_reduced_rank)        # (128, 128, 256)
-                   
+            v_b_a_proj = torch.diag(S_v_sqrt) @ Vh_v[:self.kv_lora_reduced_rank, :]  # [256, 512]
+            v_b_b_proj = U_v[:, :self.kv_lora_reduced_rank] @ torch.diag(S_v_sqrt)  # [16384, 256]
+            v_b_b_proj = v_b_b_proj.reshape(n_head_kv, v_head_dim, self.kv_lora_reduced_rank)  # [128, 128, 256]
+
+            # Cast the results back to the original data type
+            k_b_a_proj = k_b_a_proj.to(original_dtype)
+            k_b_b_proj = k_b_b_proj.to(original_dtype)
+            v_b_a_proj = v_b_a_proj.to(original_dtype)
+            v_b_b_proj = v_b_b_proj.to(original_dtype)
+
             return [
-                (self.map_tensor_name(name.replace("kv_b_proj", "k_b_a_proj")), k_b_a_proj), # (256, 512)
-                (self.map_tensor_name(name.replace("kv_b_proj", "k_b_b_proj")), k_b_b_proj), # (128, 256, 128)
-                (self.map_tensor_name(name.replace("kv_b_proj", "v_b_a_proj")), v_b_a_proj), # (256, 512)
-                (self.map_tensor_name(name.replace("kv_b_proj", "v_b_b_proj")), v_b_b_proj)  # (128, 128, 256)
+                (self.map_tensor_name(name.replace("kv_b_proj", "k_b_a_proj")), k_b_a_proj), # [256, 512]
+                (self.map_tensor_name(name.replace("kv_b_proj", "k_b_b_proj")), k_b_b_proj), # [128, 256, 128]
+                (self.map_tensor_name(name.replace("kv_b_proj", "v_b_a_proj")), v_b_a_proj), # [256, 512]
+                (self.map_tensor_name(name.replace("kv_b_proj", "v_b_b_proj")), v_b_b_proj)  # [128, 128, 256]
             ]
 
         return [(self.map_tensor_name(name), data_torch)]
