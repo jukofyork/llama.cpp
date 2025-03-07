@@ -4173,7 +4173,7 @@ class DeepseekV2Model(Model):
                 
                 assert kv_a_proj.dim() == 2
                 assert kv_a_proj.shape[0] == kv_lora_rank + qk_rope_head_dim
-                assert kv_a_proj.shape[1] == n_embed
+                assert kv_a_proj.shape[1] == n_embed, f"{n_embed} != {kv_a_proj.shape[1]}"
                 assert kv_b_proj.dim() == 2
                 assert kv_b_proj.shape[0] == n_head_kv * (v_head_dim + qk_nope_head_dim)
                 assert kv_b_proj.shape[1] == kv_lora_rank   
