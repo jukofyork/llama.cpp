@@ -587,11 +587,11 @@ class TensorNameMap:
         ),
 
         MODEL_TENSOR.ATTN_K_B: (
-            "model.layers.{bid}.self_attn.k_b_proj",  # deepseek2-mla: split into attn_k_b
+            "model.layers.{bid}.self_attn.k_b_proj",  # deepseek2-mla
         ),
 
         MODEL_TENSOR.ATTN_V_B: (
-            "model.layers.{bid}.self_attn.v_b_proj",  # deepseek2-mla: and (transposed) attn_v_b
+            "model.layers.{bid}.self_attn.v_b_proj",  # deepseek2-mla
         ),
 
         MODEL_TENSOR.ATTN_Q_A_NORM: (

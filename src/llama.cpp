@@ -6434,16 +6434,6 @@ struct llm_build_context {
                     cb(q, "q", il);
                 }
 
-
-                struct ggml_tensor * wk_b = ggml_view_3d(ctx0, model.layers[il].wk_b, n_embd_head_qk_nope, kv_lora_rank, n_head, ggml_row_size(model.layers[il].wk_b->type,
-                                                         n_embd_head_qk_nope), ggml_row_size(model.layers[il].wk_b->type, kv_lora_rank * n_embd_head_qk_nope), 0);
-                cb(wk_b, "wk_b", il);
-
-                struct ggml_tensor * wv_b = ggml_view_3d(ctx0, model.layers[il].wv_b, kv_lora_rank, n_embd_head_v, n_head, ggml_row_size(model.layers[il].wv_b->type,
-                                                         kv_lora_rank), ggml_row_size(model.layers[il].wv_b->type, kv_lora_rank * n_embd_head_v), 0);
-                cb(wv_b, "wv_b", il);
-
-
                 // ---
 
                 // split into {n_head * n_embd_head_qk_nope, n_tokens}
@@ -6456,7 +6446,7 @@ struct llm_build_context {
                 q_nope = ggml_permute(ctx0, q_nope, 0, 2, 1, 3);
                 cb(q_nope, "q_nope_perm", il);
 
-                struct ggml_tensor * q_nope_absorbed = ggml_mul_mat(ctx0, wk_b, q_nope);
+                struct ggml_tensor * q_nope_absorbed = ggml_mul_mat(ctx0, model.layers[il].wk_b, q_nope);
                 cb(q_nope_absorbed, "q_nope_absorbed", il);
 
 
@@ -6588,7 +6578,7 @@ struct llm_build_context {
                     cb(kqv_compressed_view, "kqv_compressed_view", il);
                 }
 
-                struct ggml_tensor * kqv = ggml_mul_mat(ctx0, wv_b, kqv_compressed_view);
+                struct ggml_tensor * kqv = ggml_mul_mat(ctx0, model.layers[il].wv_b, kqv_compressed_view);
                 cb(kqv, "kqv", il);
 
                 struct ggml_tensor * kqv_merged = ggml_permute(ctx0, kqv, 0, 2, 1, 3);
