@@ -4096,6 +4096,7 @@ class DeepseekV2Model(Model):
                 self.gguf_writer.add_rope_scaling_yarn_log_mul(0.1 * hparams["rope_scaling"]["mscale_all_dim"])
 
     _experts: list[dict[str, Tensor]] | None = None
+    _kv_tensors: list[dict[str, Tensor]] | None = None
 
     def modify_tensors(self, data_torch: Tensor, name: str, bid: int | None) -> Iterable[tuple[str, Tensor]]:
         # rename e_score_correction_bias tensors
@@ -4141,26 +4142,63 @@ class DeepseekV2Model(Model):
             else:
                 return []
 
-        # deepseek2-mla: split kv_b_proj into k_b_proj and v_b_proj
-        if name.endswith("kv_b_proj.weight"):
-            n_head_kv = self.hparams["num_key_value_heads"]
-            v_head_dim = self.hparams["v_head_dim"]
-            qk_nope_head_dim = self.hparams["qk_nope_head_dim"]
-            kv_lora_rank = self.hparams["kv_lora_rank"]
+        # Handle kv_b_proj.weight and kv_a_layernorm.weight
+        if name.endswith("kv_b_proj.weight") or name.endswith("kv_a_layernorm.weight"):
+            assert bid is not None
+            
+            if self._kv_tensors is None:
+                self._kv_tensors = [{} for _ in range(self.block_count)]
+            
+            self._kv_tensors[bid][name] = data_torch
 
-            assert data_torch.shape[0] == n_head_kv * (v_head_dim + qk_nope_head_dim)
-            assert data_torch.shape[1] == kv_lora_rank
+            kv_b_proj_name = f"model.layers.{bid}.self_attn.kv_b_proj.weight"
+            kv_a_layernorm_name = f"model.layers.{bid}.self_attn.kv_a_layernorm.weight"
+            
+            # Check if we have both tensors for this layer
+            if kv_b_proj_name in self._kv_tensors[bid] and kv_a_layernorm_name in self._kv_tensors[bid]:
+                n_head_kv = self.hparams["num_key_value_heads"]
+                v_head_dim = self.hparams["v_head_dim"]
+                qk_nope_head_dim = self.hparams["qk_nope_head_dim"]
+                kv_lora_rank = self.hparams["kv_lora_rank"]
+                
+                kv_b_proj = self._kv_tensors[bid][kv_b_proj_name]
+                kv_a_layernorm = self._kv_tensors[bid][kv_a_layernorm_name]
+                
+                assert kv_b_proj.dim() == 2
+                assert kv_a_layernorm.dim() == 1
+                assert kv_b_proj.shape[0] == n_head_kv * (v_head_dim + qk_nope_head_dim)
+                assert kv_b_proj.shape[1] == kv_lora_rank
+                assert kv_a_layernorm.shape[0] == kv_lora_rank
+            
+                # Calculate norms
+                norms = torch.norm(kv_b_proj, dim=0)  # Shape: [512]
+                
+                print(f"Layer {bid}: Avg norm: {norms.mean().item():.4f}, Avg kv_b_proj norm before: {torch.norm(kv_b_proj, dim=1).mean().item():.4f}, Avg kv_a_layernorm before: {torch.abs(kv_a_layernorm).mean().item():.4f}, after: {torch.abs(kv_a_layernorm * norms).mean().item():.4f}")
 
-            kv_b_proj = data_torch.view(n_head_kv, v_head_dim + qk_nope_head_dim, kv_lora_rank)
-            k_b_proj, v_b_proj = torch.split(kv_b_proj, [qk_nope_head_dim, v_head_dim], dim=1)
-            k_b_proj = k_b_proj.transpose(1, 2)
-            k_b_proj = k_b_proj.reshape(n_head_kv, kv_lora_rank, qk_nope_head_dim)
-            v_b_proj = v_b_proj.reshape(n_head_kv, v_head_dim, kv_lora_rank)
-
-            return [
-                (self.map_tensor_name(name.replace("kv_b_proj", "k_b_proj")), k_b_proj),
-                (self.map_tensor_name(name.replace("kv_b_proj", "v_b_proj")), v_b_proj)
-            ]
+                # Normalize kv_b_proj
+                kv_b_proj = kv_b_proj / norms.unsqueeze(0)
+                
+                # Scale kv_a_layernorm by the norms
+                kv_a_layernorm = kv_a_layernorm * norms
+                
+                # Now process kv_b_proj as before
+                kv_b_proj = kv_b_proj.view(n_head_kv, v_head_dim + qk_nope_head_dim, kv_lora_rank)
+                k_b_proj, v_b_proj = torch.split(kv_b_proj, [qk_nope_head_dim, v_head_dim], dim=1)
+                k_b_proj = k_b_proj.transpose(1, 2)
+                k_b_proj = k_b_proj.reshape(n_head_kv, kv_lora_rank, qk_nope_head_dim)
+                v_b_proj = v_b_proj.reshape(n_head_kv, v_head_dim, kv_lora_rank)
+                
+                # Clean up stored tensors
+                del self._kv_tensors[bid][kv_b_proj_name]
+                del self._kv_tensors[bid][kv_a_layernorm_name]
+                
+                return [
+                    (self.map_tensor_name(kv_b_proj_name.replace("kv_b_proj", "k_b_proj")), k_b_proj),
+                    (self.map_tensor_name(kv_b_proj_name.replace("kv_b_proj", "v_b_proj")), v_b_proj),
+                    (self.map_tensor_name(kv_a_layernorm_name), kv_a_layernorm)
+                ]
+            else:
+                return []
 
         return [(self.map_tensor_name(name), data_torch)]
 
