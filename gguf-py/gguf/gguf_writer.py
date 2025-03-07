@@ -767,6 +767,9 @@ class GGUFWriter:
     def add_kv_lora_rank(self, length: int) -> None:
         self.add_uint32(Keys.Attention.KV_LORA_RANK.format(arch=self.arch), length)
 
+    def add_kv_lora_reduced_rank(self, length: int) -> None:
+        self.add_uint32(Keys.Attention.KV_LORA_REDUCED_RANK.format(arch=self.arch), length)
+
     def add_relative_attn_buckets_count(self, value: int) -> None:
         self.add_uint32(Keys.Attention.REL_BUCKETS_COUNT.format(arch=self.arch), value)
 

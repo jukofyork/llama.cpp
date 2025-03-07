@@ -118,22 +118,23 @@ class Keys:
         TOKEN_SHIFT_COUNT                 = "{arch}.token_shift_count"
 
     class Attention:
-        HEAD_COUNT        = "{arch}.attention.head_count"
-        HEAD_COUNT_KV     = "{arch}.attention.head_count_kv"
-        MAX_ALIBI_BIAS    = "{arch}.attention.max_alibi_bias"
-        CLAMP_KQV         = "{arch}.attention.clamp_kqv"
-        KEY_LENGTH        = "{arch}.attention.key_length"
-        VALUE_LENGTH      = "{arch}.attention.value_length"
-        LAYERNORM_EPS     = "{arch}.attention.layer_norm_epsilon"
-        LAYERNORM_RMS_EPS = "{arch}.attention.layer_norm_rms_epsilon"
-        GROUPNORM_EPS     = "{arch}.attention.group_norm_epsilon"
-        GROUPNORM_GROUPS  = "{arch}.attention.group_norm_groups"
-        CAUSAL            = "{arch}.attention.causal"
-        Q_LORA_RANK       = "{arch}.attention.q_lora_rank"
-        KV_LORA_RANK      = "{arch}.attention.kv_lora_rank"
-        REL_BUCKETS_COUNT = "{arch}.attention.relative_buckets_count"
-        SLIDING_WINDOW    = "{arch}.attention.sliding_window"
-        SCALE             = "{arch}.attention.scale"
+        HEAD_COUNT           = "{arch}.attention.head_count"
+        HEAD_COUNT_KV        = "{arch}.attention.head_count_kv"
+        MAX_ALIBI_BIAS       = "{arch}.attention.max_alibi_bias"
+        CLAMP_KQV            = "{arch}.attention.clamp_kqv"
+        KEY_LENGTH           = "{arch}.attention.key_length"
+        VALUE_LENGTH         = "{arch}.attention.value_length"
+        LAYERNORM_EPS        = "{arch}.attention.layer_norm_epsilon"
+        LAYERNORM_RMS_EPS    = "{arch}.attention.layer_norm_rms_epsilon"
+        GROUPNORM_EPS        = "{arch}.attention.group_norm_epsilon"
+        GROUPNORM_GROUPS     = "{arch}.attention.group_norm_groups"
+        CAUSAL               = "{arch}.attention.causal"
+        Q_LORA_RANK          = "{arch}.attention.q_lora_rank"
+        KV_LORA_RANK         = "{arch}.attention.kv_lora_rank"
+        KV_LORA_REDUCED_RANK = "{arch}.attention.kv_lora_reduced_rank"
+        REL_BUCKETS_COUNT    = "{arch}.attention.relative_buckets_count"
+        SLIDING_WINDOW       = "{arch}.attention.sliding_window"
+        SCALE                = "{arch}.attention.scale"
 
     class Rope:
         DIMENSION_COUNT         = "{arch}.rope.dimension_count"
@@ -356,8 +357,10 @@ class MODEL_TENSOR(IntEnum):
     ATTN_Q_B             = auto()
     ATTN_KV_A_MQA        = auto()
     ATTN_KV_B            = auto()
-    ATTN_K_B             = auto()
-    ATTN_V_B             = auto()
+    ATTN_K_B_A           = auto()
+    ATTN_K_B_B           = auto()
+    ATTN_V_B_A           = auto()
+    ATTN_V_B_B           = auto()
     ATTN_Q_A_NORM        = auto()
     ATTN_KV_A_NORM       = auto()
     FFN_SUB_NORM         = auto()
@@ -545,8 +548,10 @@ TENSOR_NAMES: dict[MODEL_TENSOR, str] = {
     MODEL_TENSOR.ATTN_Q_B:                  "blk.{bid}.attn_q_b",
     MODEL_TENSOR.ATTN_KV_A_MQA:             "blk.{bid}.attn_kv_a_mqa",
     MODEL_TENSOR.ATTN_KV_B:                 "blk.{bid}.attn_kv_b",
-    MODEL_TENSOR.ATTN_K_B:                  "blk.{bid}.attn_k_b",
-    MODEL_TENSOR.ATTN_V_B:                  "blk.{bid}.attn_v_b",
+    MODEL_TENSOR.ATTN_K_B_A:                "blk.{bid}.attn_k_b_a",
+    MODEL_TENSOR.ATTN_K_B_B:                "blk.{bid}.attn_k_b_b",
+    MODEL_TENSOR.ATTN_V_B_A:                "blk.{bid}.attn_v_b_a",
+    MODEL_TENSOR.ATTN_V_B_B:                "blk.{bid}.attn_v_b_b",
     MODEL_TENSOR.ATTN_Q_A_NORM:             "blk.{bid}.attn_q_a_norm",
     MODEL_TENSOR.ATTN_KV_A_NORM:            "blk.{bid}.attn_kv_a_norm",
     MODEL_TENSOR.ATTN_SUB_NORM:             "blk.{bid}.attn_sub_norm",
@@ -1336,8 +1341,10 @@ MODEL_TENSORS: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
         MODEL_TENSOR.ATTN_Q_A,
         MODEL_TENSOR.ATTN_Q_B,
         MODEL_TENSOR.ATTN_KV_A_MQA,
-        MODEL_TENSOR.ATTN_K_B,
-        MODEL_TENSOR.ATTN_V_B,
+        MODEL_TENSOR.ATTN_K_B_A,
+        MODEL_TENSOR.ATTN_K_B_B,
+        MODEL_TENSOR.ATTN_V_B_A,
+        MODEL_TENSOR.ATTN_V_B_B,
         MODEL_TENSOR.ATTN_Q_A_NORM,
         MODEL_TENSOR.ATTN_KV_A_NORM,
         MODEL_TENSOR.ATTN_OUT,

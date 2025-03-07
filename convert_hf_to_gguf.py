@@ -4059,6 +4059,8 @@ class DeepseekModel(Model):
 class DeepseekV2Model(Model):
     model_arch = gguf.MODEL_ARCH.DEEPSEEK2
 
+    kv_lora_reduced_rank = 256  # New reduced rank size
+
     def set_vocab(self):
         self._set_vocab_gpt2()
 
@@ -4071,6 +4073,7 @@ class DeepseekV2Model(Model):
         if "q_lora_rank" in hparams and hparams["q_lora_rank"] is not None:
             self.gguf_writer.add_q_lora_rank(hparams["q_lora_rank"])
         self.gguf_writer.add_kv_lora_rank(hparams["kv_lora_rank"])
+        self.gguf_writer.add_kv_lora_reduced_rank(self.kv_lora_reduced_rank)
         self.gguf_writer.add_key_length(hparams["qk_nope_head_dim"] + hparams["qk_rope_head_dim"])
         self.gguf_writer.add_value_length(hparams["v_head_dim"])
         self.gguf_writer.add_expert_feed_forward_length(hparams["moe_intermediate_size"])
@@ -4148,18 +4151,32 @@ class DeepseekV2Model(Model):
             qk_nope_head_dim = self.hparams["qk_nope_head_dim"]
             kv_lora_rank = self.hparams["kv_lora_rank"]
 
-            assert data_torch.shape[0] == n_head_kv * (v_head_dim + qk_nope_head_dim)
+            assert data_torch.shape[0] == n_head_kv * (qk_nope_head_dim + v_head_dim)
             assert data_torch.shape[1] == kv_lora_rank
 
-            kv_b_proj = data_torch.view(n_head_kv, v_head_dim + qk_nope_head_dim, kv_lora_rank)
+            kv_b_proj = data_torch.view(n_head_kv, qk_nope_head_dim + v_head_dim, kv_lora_rank)
             k_b_proj, v_b_proj = torch.split(kv_b_proj, [qk_nope_head_dim, v_head_dim], dim=1)
-            k_b_proj = k_b_proj.transpose(1, 2)
-            k_b_proj = k_b_proj.reshape(n_head_kv, kv_lora_rank, qk_nope_head_dim)
-            v_b_proj = v_b_proj.reshape(n_head_kv, v_head_dim, kv_lora_rank)
-
+            
+            k_matrix = k_b_proj.reshape(-1, kv_lora_rank)                                            # Flatten to (16384, 512)
+            U_k, S_k, Vh_k = torch.linalg.svd(k_matrix, full_matrices=False)
+            S_k_sqrt = torch.sqrt(S_k[:self.kv_lora_reduced_rank])
+            k_b_a_proj = torch.diag(S_k_sqrt) @ Vh_k[:self.kv_lora_reduced_rank, :]                  # (256, 512)
+            k_b_b_proj = U_k[:, :self.kv_lora_reduced_rank] @ torch.diag(S_k_sqrt)                   # (16384, 256)
+            k_b_b_proj = k_b_b_proj.reshape(n_head_kv, qk_nope_head_dim, self.kv_lora_reduced_rank)  # (128, 128, 256)
+            k_b_b_proj = k_b_b_proj.transpose(1, 2)                                                  # (128, 256, 128)
+            
+            v_matrix = v_b_proj.reshape(-1, kv_lora_rank)                                            # Flatten to (16384, 512)
+            U_v, S_v, Vh_v = torch.linalg.svd(v_matrix, full_matrices=False)
+            S_v_sqrt = torch.sqrt(S_v[:self.kv_lora_reduced_rank])
+            v_b_a_proj = torch.diag(S_v_sqrt) @ Vh_v[:self.kv_lora_reduced_rank, :]                  # (256, 512)
+            v_b_b_proj = U_v[:, :self.kv_lora_reduced_rank] @ torch.diag(S_v_sqrt)                   # (16384, 256)
+            v_b_b_proj = v_b_b_proj.reshape(n_head_kv, v_head_dim, self.kv_lora_reduced_rank)        # (128, 128, 256)
+                   
             return [
-                (self.map_tensor_name(name.replace("kv_b_proj", "k_b_proj")), k_b_proj),
-                (self.map_tensor_name(name.replace("kv_b_proj", "v_b_proj")), v_b_proj)
+                (self.map_tensor_name(name.replace("kv_b_proj", "k_b_a_proj")), k_b_a_proj), # (256, 512)
+                (self.map_tensor_name(name.replace("kv_b_proj", "k_b_b_proj")), k_b_b_proj), # (128, 256, 128)
+                (self.map_tensor_name(name.replace("kv_b_proj", "v_b_a_proj")), v_b_a_proj), # (256, 512)
+                (self.map_tensor_name(name.replace("kv_b_proj", "v_b_b_proj")), v_b_b_proj)  # (128, 128, 256)
             ]
 
         return [(self.map_tensor_name(name), data_torch)]

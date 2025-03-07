@@ -1070,6 +1070,7 @@ void llama_model::load_hparams(llama_model_loader & ml) {
                     ml.get_key(LLM_KV_ATTENTION_Q_LORA_RANK, hparams.n_lora_q);
                 }
                 ml.get_key(LLM_KV_ATTENTION_KV_LORA_RANK,     hparams.n_lora_kv);
+                ml.get_key(LLM_KV_ATTENTION_KV_LORA_REDUCED_RANK, hparams.n_lora_reduced_kv);
                 ml.get_key(LLM_KV_EXPERT_FEED_FORWARD_LENGTH, hparams.n_ff_exp);
                 ml.get_key(LLM_KV_EXPERT_SHARED_COUNT,        hparams.n_expert_shared);
                 ml.get_key(LLM_KV_EXPERT_WEIGHTS_SCALE,       hparams.expert_weights_scale);
@@ -2868,6 +2869,7 @@ bool llama_model::load_tensors(llama_model_loader & ml) {
 
                     const int64_t q_lora_rank  = hparams.n_lora_q;
                     const int64_t kv_lora_rank = hparams.n_lora_kv;
+                    const int64_t kv_lora_reduced_rank = hparams.n_lora_reduced_kv;
 
                     const int64_t n_ff_exp        = hparams.n_ff_exp;
                     const int64_t n_expert_shared = hparams.n_expert_shared;
@@ -2897,10 +2899,13 @@ bool llama_model::load_tensors(llama_model_loader & ml) {
 
                         layer.wkv_a_mqa = create_tensor(tn(LLM_TENSOR_ATTN_KV_A_MQA, "weight", i), {n_embd, kv_lora_rank + n_embd_head_qk_rope}, 0);
 
-                        layer.wk_b      = create_tensor(tn(LLM_TENSOR_ATTN_K_B, "weight", i), {n_embd_head_qk_nope, kv_lora_rank, n_head}, 0);
-                        layer.wv_b      = create_tensor(tn(LLM_TENSOR_ATTN_V_B, "weight", i), {kv_lora_rank, n_embd_head_v, n_head}, 0);
+                        layer.wk_b_a = create_tensor(tn(LLM_TENSOR_ATTN_K_B_A, "weight", i), {kv_lora_rank, kv_lora_reduced_rank}, 0);
+                        layer.wk_b_b = create_tensor(tn(LLM_TENSOR_ATTN_K_B_B, "weight", i), {n_embd_head_qk_nope, kv_lora_reduced_rank, n_head}, 0);
 
-                        layer.wo        = create_tensor(tn(LLM_TENSOR_ATTN_OUT, "weight", i), {n_head * n_embd_head_v, n_embd}, 0);
+                        layer.wv_b_a = create_tensor(tn(LLM_TENSOR_ATTN_V_B_A, "weight", i), {kv_lora_rank, kv_lora_reduced_rank}, 0);
+                        layer.wv_b_b = create_tensor(tn(LLM_TENSOR_ATTN_V_B_B, "weight", i), {kv_lora_reduced_rank, n_embd_head_v, n_head}, 0);
+
+                        layer.wo = create_tensor(tn(LLM_TENSOR_ATTN_OUT, "weight", i), {n_head * n_embd_head_v, n_embd}, 0);
 
                         layer.ffn_norm = create_tensor(tn(LLM_TENSOR_FFN_NORM, "weight", i), {n_embd}, 0);
 
