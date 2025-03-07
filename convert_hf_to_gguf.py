@@ -4164,6 +4164,7 @@ class DeepseekV2Model(Model):
                 n_head_kv = self.hparams["num_key_value_heads"]
                 v_head_dim = self.hparams["v_head_dim"]
                 qk_nope_head_dim = self.hparams["qk_nope_head_dim"]
+                qk_rope_head_dim = self.hparams["qk_rope_head_dim"]
                 kv_lora_rank = self.hparams["kv_lora_rank"]
                 
                 kv_a_proj = self._kv_tensors[bid][kv_a_proj_name]
@@ -4171,7 +4172,7 @@ class DeepseekV2Model(Model):
                 kv_a_layernorm = self._kv_tensors[bid][kv_a_layernorm_name]
                 
                 assert kv_a_proj.dim() == 2
-                assert kv_a_proj.shape[0] == kv_lora_rank + qk_nope_head_dim
+                assert kv_a_proj.shape[0] == kv_lora_rank + qk_rope_head_dim
                 assert kv_a_proj.shape[1] == n_embed
                 assert kv_b_proj.dim() == 2
                 assert kv_b_proj.shape[0] == n_head_kv * (v_head_dim + qk_nope_head_dim)
