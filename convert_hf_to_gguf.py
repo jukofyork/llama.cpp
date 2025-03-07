@@ -4189,9 +4189,9 @@ class DeepseekV2Model(Model):
                 # Calculate norms for kv_b_proj
                 norms_b = torch.norm(kv_b_proj, dim=0)  # L2 norm of columns, Shape: [kv_lora_rank]
                            
-                print(f"Layer {bid} BEFORE: Avg row norm A    : {norms_a.mean().item():.4f}")
-                print(f"Layer {bid} BEFORE: Avg column norm B : {norms_b.mean().item():.4f}")
-                print(f"Layer {bid} BEFORE: kv_a_layernorm    : {torch.norm(kv_a_layernorm).item():.4f}")
+                print(f"Layer {bid} [OLD] Avg row norm A    : {norms_a.mean().item():.4f}")
+                print(f"Layer {bid} [OLD] Avg column norm B : {norms_b.mean().item():.4f}")
+                print(f"Layer {bid} [OLD] kv_a_layernorm    : {torch.norm(kv_a_layernorm).item():.4f}")
 
                 # Normalize kv_a_proj slice
                 kv_a_proj_slice = kv_a_proj_slice / norms_a.unsqueeze(1)
@@ -4203,9 +4203,9 @@ class DeepseekV2Model(Model):
                 # Scale kv_a_layernorm by both norms
                 kv_a_layernorm = kv_a_layernorm * norms_b * norms_a
                 
-                print(f"Layer {bid} AFTER: Avg row norm A    : {torch.norm(kv_a_proj[:kv_lora_rank, :], dim=1).mean().item():.4f}")
-                print(f"Layer {bid} AFTER: Avg column norm B : {torch.norm(kv_b_proj, dim=0).mean().item():.4f}")
-                print(f"Layer {bid} AFTER: kv_a_layernorm    : {torch.norm(kv_a_layernorm).item():.4f}")
+                print(f"Layer {bid} [NEW] Avg row norm A    : {torch.norm(kv_a_proj[:kv_lora_rank, :], dim=1).mean().item():.4f}")
+                print(f"Layer {bid} [NEW]Avg column norm B : {torch.norm(kv_b_proj, dim=0).mean().item():.4f}")
+                print(f"Layer {bid} [NEW]kv_a_layernorm    : {torch.norm(kv_a_layernorm).item():.4f}")
                 
                 # Now process kv_b_proj as before
                 kv_b_proj = kv_b_proj.view(n_head_kv, v_head_dim + qk_nope_head_dim, kv_lora_rank)
@@ -4220,10 +4220,10 @@ class DeepseekV2Model(Model):
                 del self._kv_tensors[bid][kv_a_proj_name]
                 
                 return [
+                    (self.map_tensor_name(kv_a_proj_name), kv_a_proj),
                     (self.map_tensor_name(kv_b_proj_name.replace("kv_b_proj", "k_b_proj")), k_b_proj),
                     (self.map_tensor_name(kv_b_proj_name.replace("kv_b_proj", "v_b_proj")), v_b_proj),
-                    (self.map_tensor_name(kv_a_layernorm_name), kv_a_layernorm),
-                    (self.map_tensor_name(kv_a_proj_name), kv_a_proj)
+                    (self.map_tensor_name(kv_a_layernorm_name), kv_a_layernorm)
                 ]
             else:
                 return []
