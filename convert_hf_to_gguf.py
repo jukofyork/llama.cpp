@@ -4142,50 +4142,69 @@ class DeepseekV2Model(Model):
             else:
                 return []
 
-        # Handle kv_b_proj.weight and kv_a_layernorm.weight
-        if name.endswith("kv_b_proj.weight") or name.endswith("kv_a_layernorm.weight"):
+        # Handle kv_a_proj_with_mqa.weight, kv_b_proj.weight, and kv_a_layernorm.weight
+        if name.endswith("kv_a_proj_with_mqa.weight") or name.endswith("kv_b_proj.weight") or name.endswith("kv_a_layernorm.weight"):
             assert bid is not None
             
             if self._kv_tensors is None:
                 self._kv_tensors = [{} for _ in range(self.block_count)]
             
             self._kv_tensors[bid][name] = data_torch
-
+        
+            kv_a_proj_name = f"model.layers.{bid}.self_attn.kv_a_proj_with_mqa.weight"
             kv_b_proj_name = f"model.layers.{bid}.self_attn.kv_b_proj.weight"
             kv_a_layernorm_name = f"model.layers.{bid}.self_attn.kv_a_layernorm.weight"
             
-            # Check if we have both tensors for this layer
-            if kv_b_proj_name in self._kv_tensors[bid] and kv_a_layernorm_name in self._kv_tensors[bid]:
+            # Check if we have all three tensors for this layer
+            if (kv_a_proj_name in self._kv_tensors[bid] and
+                kv_b_proj_name in self._kv_tensors[bid] and 
+                kv_a_layernorm_name in self._kv_tensors[bid]):
+                
+                n_embed = self.hparams.get("n_embed")
                 n_head_kv = self.hparams["num_key_value_heads"]
                 v_head_dim = self.hparams["v_head_dim"]
                 qk_nope_head_dim = self.hparams["qk_nope_head_dim"]
                 kv_lora_rank = self.hparams["kv_lora_rank"]
                 
+                kv_a_proj = self._kv_tensors[bid][kv_a_proj_name]
                 kv_b_proj = self._kv_tensors[bid][kv_b_proj_name]
                 kv_a_layernorm = self._kv_tensors[bid][kv_a_layernorm_name]
                 
+                assert kv_a_proj.dim() == 2
+                assert kv_a_proj.shape[0] == kv_lora_rank + qk_nope_head_dim
+                assert kv_a_proj.shape[1] == n_embed
                 assert kv_b_proj.dim() == 2
-                assert kv_a_layernorm.dim() == 1
                 assert kv_b_proj.shape[0] == n_head_kv * (v_head_dim + qk_nope_head_dim)
-                assert kv_b_proj.shape[1] == kv_lora_rank
+                assert kv_b_proj.shape[1] == kv_lora_rank   
+                assert kv_a_layernorm.dim() == 1
                 assert kv_a_layernorm.shape[0] == kv_lora_rank
-            
-                # Calculate norms
-                norms = torch.norm(kv_b_proj, dim=0)  # L2 norm of columns, Shape: [512]
-                
-                print(f"Layer {bid} NORMS: min: {norms.min().item():.4f}, max: {norms.max().item():.4f}, std: {norms.std().item():.4f}")
-                print(f"Layer {bid} NORMS: 10th percentile: {torch.quantile(norms, 0.1).item():.4f}, 50th: {torch.quantile(norms, 0.5).item():.4f}, 90th: {torch.quantile(norms, 0.9).item():.4f}")
-                print(f"Layer {bid} BEFORE: Avg column norm: {norms.mean().item():.4f}, Avg row norm: {torch.norm(kv_b_proj, dim=1).mean().item():.4f}")
-                print(f"Layer {bid} BEFORE: kv_a_layernorm norm: {torch.norm(kv_a_layernorm).item():.4f}")
 
+                # Get the first kv_lora_rank rows of kv_a_proj
+                kv_a_proj_slice = kv_a_proj[:kv_lora_rank, :]
+
+                # Calculate norms for kv_a_proj slice
+                norms_a = torch.norm(kv_a_proj_slice, dim=1)  # L2 norm of rows, Shape: [kv_lora_rank]
+                                
+                # Calculate norms for kv_b_proj
+                norms_b = torch.norm(kv_b_proj, dim=0)  # L2 norm of columns, Shape: [kv_lora_rank]
+                           
+                print(f"Layer {bid} BEFORE: Avg row norm A    : {norms_a.mean().item():.4f}")
+                print(f"Layer {bid} BEFORE: Avg column norm B : {norms_b.mean().item():.4f}")
+                print(f"Layer {bid} BEFORE: kv_a_layernorm    : {torch.norm(kv_a_layernorm).item():.4f}")
+
+                # Normalize kv_a_proj slice
+                kv_a_proj_slice = kv_a_proj_slice / norms_a.unsqueeze(1)
+                kv_a_proj[:kv_lora_rank, :] = kv_a_proj_slice
+                                
                 # Normalize kv_b_proj
-                kv_b_proj = kv_b_proj / norms.unsqueeze(0)
+                kv_b_proj = kv_b_proj / norms_b.unsqueeze(0)
+
+                # Scale kv_a_layernorm by both norms
+                kv_a_layernorm = kv_a_layernorm * norms_b * norms_a
                 
-                # Scale kv_a_layernorm by the norms
-                kv_a_layernorm = kv_a_layernorm * norms
-                
-                print(f"Layer {bid} AFTER: Avg column norm: {torch.norm(kv_b_proj, dim=0).mean().item():.4f}, Avg row norm: {torch.norm(kv_b_proj, dim=1).mean().item():.4f}")
-                print(f"Layer {bid} AFTER: kv_a_layernorm norm: {torch.norm(kv_a_layernorm).item():.4f}")
+                print(f"Layer {bid} AFTER: Avg row norm A    : {torch.norm(kv_a_proj[:kv_lora_rank, :], dim=1).mean().item():.4f}")
+                print(f"Layer {bid} AFTER: Avg column norm B : {torch.norm(kv_b_proj, dim=0).mean().item():.4f}")
+                print(f"Layer {bid} AFTER: kv_a_layernorm    : {torch.norm(kv_a_layernorm).item():.4f}")
                 
                 # Now process kv_b_proj as before
                 kv_b_proj = kv_b_proj.view(n_head_kv, v_head_dim + qk_nope_head_dim, kv_lora_rank)
@@ -4197,11 +4216,13 @@ class DeepseekV2Model(Model):
                 # Clean up stored tensors
                 del self._kv_tensors[bid][kv_b_proj_name]
                 del self._kv_tensors[bid][kv_a_layernorm_name]
+                del self._kv_tensors[bid][kv_a_proj_name]
                 
                 return [
                     (self.map_tensor_name(kv_b_proj_name.replace("kv_b_proj", "k_b_proj")), k_b_proj),
                     (self.map_tensor_name(kv_b_proj_name.replace("kv_b_proj", "v_b_proj")), v_b_proj),
-                    (self.map_tensor_name(kv_a_layernorm_name), kv_a_layernorm)
+                    (self.map_tensor_name(kv_a_layernorm_name), kv_a_layernorm),
+                    (self.map_tensor_name(kv_a_proj_name), kv_a_proj)
                 ]
             else:
                 return []
