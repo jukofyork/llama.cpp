@@ -4172,14 +4172,23 @@ class DeepseekV2Model(Model):
             
                 # Calculate norms
                 norms = torch.norm(kv_b_proj, dim=0)  # Shape: [512]
-                
-                print(f"Layer {bid}: Avg norm: {norms.mean().item():.4f}, Avg kv_b_proj norm before: {torch.norm(kv_b_proj, dim=1).mean().item():.4f}, Avg kv_a_layernorm before: {torch.abs(kv_a_layernorm).mean().item():.4f}, after: {torch.abs(kv_a_layernorm * norms).mean().item():.4f}")
 
+                print(f"Layer {bid} NORMS: min: {norms.min().item():.4f}, max: {norms.max().item():.4f}, std: {norms.std().item():.4f}")
+                print(f"Layer {bid} NORMS: 10th percentile: {torch.quantile(norms, 0.1).item():.4f}, 50th: {torch.quantile(norms, 0.5).item():.4f}, 90th: {torch.quantile(norms, 0.9).item():.4f}")
+                
+                # Print before normalization
+                print(f"Layer {bid} BEFORE: Avg column norm: {norms.mean().item():.4f}, Avg row norm: {torch.norm(kv_b_proj, dim=1).mean().item():.4f}")
+                print(f"Layer {bid} BEFORE: Avg kv_a_layernorm: {torch.abs(kv_a_layernorm).mean().item():.4f}")
+                
                 # Normalize kv_b_proj
                 kv_b_proj = kv_b_proj / norms.unsqueeze(0)
                 
                 # Scale kv_a_layernorm by the norms
                 kv_a_layernorm = kv_a_layernorm * norms
+                
+                # Print after normalization
+                print(f"Layer {bid} AFTER: Avg column norm: {torch.norm(kv_b_proj, dim=0).mean().item():.4f}, Avg row norm: {torch.norm(kv_b_proj, dim=1).mean().item():.4f}")
+                print(f"Layer {bid} AFTER: Avg kv_a_layernorm: {torch.abs(kv_a_layernorm).mean().item():.4f}")
                 
                 # Now process kv_b_proj as before
                 kv_b_proj = kv_b_proj.view(n_head_kv, v_head_dim + qk_nope_head_dim, kv_lora_rank)
