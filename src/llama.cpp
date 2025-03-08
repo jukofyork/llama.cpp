@@ -6389,8 +6389,6 @@ struct llm_build_context {
         const float attn_factor_scaled = 1.0f / (1.0f + 0.1f * logf(1.0f / freq_scale));
 
         const uint32_t n_embd_head_qk_rope = hparams.n_rot;
-        const uint32_t n_embd_head_qk_nope = hparams.n_embd_head_k - hparams.n_rot;
-        const uint32_t kv_lora_rank = hparams.n_lora_kv;
 
         struct ggml_tensor * cur;
         struct ggml_tensor * inpL;
@@ -6427,19 +6425,19 @@ struct llm_build_context {
                     cb(q_compressed, "q_compressed_norm", il);
 
                     // {q_lora_rank, n_head * n_embd_head_qk_nope} * {q_lora_rank, n_tokens} -> {n_head * n_embd_head_qk_nope, n_tokens}
-                    struct ggml_tensor * q_nope = ggml_mul_mat(ctx0, model.layers[il].wq_b, q_compressed);
+                    q_nope = ggml_mul_mat(ctx0, model.layers[il].wq_b, q_compressed);
                     cb(q_nope, "q_nope", il);
 
                     // {q_lora_rank, n_head * n_embd_head_qk_rope} * {q_lora_rank, n_tokens} -> {n_head * n_embd_head_qk_rope, n_tokens}
-                    struct ggml_tensor * q_mqa = ggml_mul_mat(ctx0, model.layers[il].wq_b_mqa, q_compressed);
+                    q_mqa = ggml_mul_mat(ctx0, model.layers[il].wq_b_mqa, q_compressed);
                     cb(q_mqa, "q_mqa", il);
                 } else {
                     // {n_embd, n_head * n_embd_head_qk_nope} * {n_embd, n_tokens} -> {n_head * n_embd_head_qk_nope, n_tokens}
-                    struct ggml_tensor * q_nope = ggml_mul_mat(ctx0, model.layers[il].wq, cur);
+                    q_nope = ggml_mul_mat(ctx0, model.layers[il].wq, cur);
                     cb(q_nope, "q_nope", il);
 
                     // {n_embd, n_head * n_embd_head_qk_rope} * {n_embd, n_tokens} -> {n_head * n_embd_head_qk_rope, n_tokens}
-                    struct ggml_tensor * q_mqa = ggml_mul_mat(ctx0, model.layers[il].wq_mqa, cur);
+                    q_mqa = ggml_mul_mat(ctx0, model.layers[il].wq_mqa, cur);
                     cb(q_mqa, "q_mqa", il);
                 }
 
