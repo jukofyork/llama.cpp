@@ -6388,6 +6388,7 @@ struct llm_build_context {
         const float kq_scale = 1.0f*mscale*mscale/sqrtf(float(hparams.n_embd_head_k));
         const float attn_factor_scaled = 1.0f / (1.0f + 0.1f * logf(1.0f / freq_scale));
 
+        const uint32_t n_embd_head_qk_nope = hparams.n_embd_head_k - hparams.n_rot;
         const uint32_t n_embd_head_qk_rope = hparams.n_rot;
 
         struct ggml_tensor * cur;
@@ -6493,7 +6494,7 @@ struct llm_build_context {
                 );
                 cb(k_mqa_view, "k_mqa_view_rope", il);
 
-                // {n_head * (n_embd_head_qk_nope + n_embd_head_qk_rope), n_tokens}
+                // {n_embd_head_qk_nope + n_embd_head_qk_rope, n_head, n_tokens}
                 struct ggml_tensor * q_states = ggml_concat(ctx0, q_nope_view, q_mqa_view, 0);
                 cb(q_states, "q_states", il);
 
