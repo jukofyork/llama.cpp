@@ -6505,7 +6505,7 @@ struct llm_build_context {
                 struct ggml_tensor * q_states = ggml_concat(ctx0, q_nope_view, q_mqa_view, 0);
                 cb(q_states, "q_states", il);
 
-                // {n_head * (n_embd_head_qk_nope + n_embd_head_qk_rope), n_tokens}
+                // {n_embd_head_qk_nope + n_embd_head_qk_rope, n_head, n_tokens}
                 struct ggml_tensor * k_states = ggml_concat(ctx0, k_nope_view, ggml_repeat(ctx0, k_mqa_view, q_mqa_view), 0);
                 cb(k_states, "k_states", il);
 
