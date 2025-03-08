@@ -6445,14 +6445,14 @@ struct llm_build_context {
                 // {n_embd_head_qk_nope, n_head, n_tokens}
                 struct ggml_tensor * q_nope_view = ggml_view_3d(ctx0, q_nope, n_embd_head_qk_nope, n_head, n_tokens,
                         ggml_row_size(q_nope->type, n_embd_head_qk_nope),
-                        ggml_row_size(q_nope->type, n_embd_head_qk_nope * n_head),
+                        ggml_row_size(q_nope->type, n_head * n_embd_head_qk_nope),
                         0);
                 cb(q_nope_view, "q_nope_view", il);
 
                 // {n_embd_head_qk_rope, n_head, n_tokens}
                 struct ggml_tensor * q_mqa_view = ggml_view_3d(ctx0, q_mqa, n_embd_head_qk_rope, n_head, n_tokens,
                         ggml_row_size(q_mqa->type, n_embd_head_qk_rope),
-                        ggml_row_size(q_mqa->type, n_embd_head_qk_rope * n_head),
+                        ggml_row_size(q_mqa->type, n_head * n_embd_head_qk_rope),
                         0);
                 cb(q_mqa_view, "q_mqa_view", il);
 
@@ -6475,6 +6475,13 @@ struct llm_build_context {
                 // {kv_lora_rank, n_head * n_embd_head_qk_nope} * {kv_lora_rank, n_tokens} -> {n_head * n_embd_head_qk_nope, n_tokens}
                 struct ggml_tensor * k_nope = ggml_mul_mat(ctx0, model.layers[il].wk_b, kv_compressed);
                 cb(k_nope, "k_nope", il);
+
+                // {n_embd_head_qk_nope, n_head, n_tokens}
+                struct ggml_tensor * k_nope_view = ggml_view_3d(ctx0, k_nope, n_embd_head_qk_nope, n_head, n_tokens,
+                        ggml_row_size(k_nope->type, n_embd_head_qk_nope),
+                        ggml_row_size(k_nope->type, n_head * n_embd_head_qk_nope),
+                        0);
+                cb(k_nope_view, "k_nope_view", il);
 
                 // {n_embd, n_embd_head_qk_rope} * {n_embd, n_tokens} -> {n_embd_head_qk_rope, n_tokens}
                 struct ggml_tensor * k_mqa = ggml_mul_mat(ctx0, model.layers[il].wk_mqa, cur);
@@ -6499,7 +6506,7 @@ struct llm_build_context {
                 cb(q_states, "q_states", il);
 
                 // {n_head * (n_embd_head_qk_nope + n_embd_head_qk_rope), n_tokens}
-                struct ggml_tensor * k_states = ggml_concat(ctx0, k_nope, ggml_repeat(ctx0, k_mqa, q_mqa), 0);
+                struct ggml_tensor * k_states = ggml_concat(ctx0, k_nope_view, ggml_repeat(ctx0, k_mqa_view, q_mqa_view), 0);
                 cb(k_states, "k_states", il);
 
                 // {kv_lora_rank, n_head * n_embd_head_v} * {kv_lora_rank, n_tokens} -> {n_head * n_embd_head_v, n_tokens}
