@@ -6441,6 +6441,13 @@ struct llm_build_context {
                     cb(q_mqa, "q_mqa", il);
                 }
 
+                // {n_embd_head_qk_nope, n_head, n_tokens}
+                struct ggml_tensor * q_nope_view = ggml_view_3d(ctx0, q_nope, n_embd_head_qk_nope, n_head, n_tokens,
+                        ggml_row_size(q_nope->type, n_embd_head_qk_nope),
+                        ggml_row_size(q_nope->type, n_embd_head_qk_nope * n_head),
+                        0);
+                cb(q_nope_view, "q_nope_view", il);
+
                 // {n_embd_head_qk_rope, n_head, n_tokens}
                 struct ggml_tensor * q_mqa_view = ggml_view_3d(ctx0, q_mqa, n_embd_head_qk_rope, n_head, n_tokens,
                         ggml_row_size(q_mqa->type, n_embd_head_qk_rope),
@@ -6487,7 +6494,7 @@ struct llm_build_context {
                 cb(k_mqa_view, "k_mqa_view_rope", il);
 
                 // {n_head * (n_embd_head_qk_nope + n_embd_head_qk_rope), n_tokens}
-                struct ggml_tensor * q_states = ggml_concat(ctx0, q_nope, q_mqa, 0);
+                struct ggml_tensor * q_states = ggml_concat(ctx0, q_nope_view, q_mqa_view, 0);
                 cb(q_states, "q_states", il);
 
                 // {n_head * (n_embd_head_qk_nope + n_embd_head_qk_rope), n_tokens}
