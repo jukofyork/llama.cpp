@@ -4110,7 +4110,7 @@ class DeepseekV2Model(Model):
             q_mqa_proj = q_mqa_proj.reshape(n_head_kv * qk_rope_head_dim, q_lora_rank)
 
             return [
-                ("q_b_proj", q_b_proj),
+                (name, q_b_proj),
                 (self.map_tensor_name(name.replace("q_b_proj", "q_mqa_proj")), q_mqa_proj)
             ]
 
