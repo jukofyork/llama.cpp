@@ -6476,8 +6476,8 @@ struct llm_build_context {
 
                 // {n_embd_head_qk_rope, 1, n_tokens}
                 struct ggml_tensor * k_mqa_view = ggml_view_3d(ctx0, k_mqa, n_embd_head_qk_rope, 1, n_tokens,
-                		ggml_row_size(kv_mqa->type, n_embd_head_qk_rope),
-						ggml_row_size(kv_mqa->type, n_embd_head_qk_rope),
+                		ggml_row_size(k_mqa->type, n_embd_head_qk_rope),
+						ggml_row_size(k_mqa->type, n_embd_head_qk_rope),
                         0);
                 cb(k_mqa_view, "k_mqa_view", il);
 
