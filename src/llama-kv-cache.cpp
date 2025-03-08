@@ -32,7 +32,7 @@ bool llama_kv_cache_init(
 
     cache.recurrent = llama_model_is_recurrent(&model);
     cache.v_trans   = !cache.recurrent && !cparams.flash_attn;
-    cache.can_shift = !cache.recurrent && model.arch != LLM_ARCH_DEEPSEEK2; // not supported due to MLA
+    cache.can_shift = !cache.recurrent && (model.arch != LLM_ARCH_DEEPSEEK2 || /* TODO: MLA */);
 
     LLAMA_LOG_INFO("%s: kv_size = %d, offload = %d, type_k = '%s', type_v = '%s', n_layer = %d, can_shift = %d\n",
             __func__, kv_size, offload, ggml_type_name(type_k), ggml_type_name(type_v), n_layer, cache.can_shift);
@@ -93,15 +93,11 @@ bool llama_kv_cache_init(
 
         ggml_tensor * k;
         ggml_tensor * v;
-        if (model.arch == LLM_ARCH_DEEPSEEK2) {
+        if (model.arch == LLM_ARCH_DEEPSEEK2 /* && TODO: MLA */) {
             const uint32_t n_embd_head_qk_rope = hparams.n_rot;
             const uint32_t kv_lora_rank = hparams.n_lora_kv;
             k = ggml_new_tensor_1d(ctx, type_k, (kv_lora_rank+n_embd_head_qk_rope)*kv_size);
-            if (cparams.flash_attn) {
-                v = ggml_new_tensor_1d(ctx, type_v, 0); // FA reuses k in place of v
-            } else {
-                v = ggml_new_tensor_1d(ctx, type_v, kv_lora_rank*kv_size); // transposed for non-FA
-            }
+            v = ggml_new_tensor_1d(ctx, type_v, kv_lora_rank*kv_size);
         } else {
             k = ggml_new_tensor_1d(ctx, type_k, n_embd_k_gqa*kv_size);
             v = ggml_new_tensor_1d(ctx, type_v, n_embd_v_gqa*kv_size);

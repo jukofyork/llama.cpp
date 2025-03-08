@@ -30,7 +30,6 @@ import gguf
 
 logger = logging.getLogger("hf-to-gguf")
 
-
 ###### MODEL DEFINITIONS ######
 
 class SentencePieceTokenTypes(IntEnum):
@@ -41,9 +40,7 @@ class SentencePieceTokenTypes(IntEnum):
     UNUSED = 5
     BYTE = 6
 
-
-AnyModel = TypeVar("AnyModel", bound="type[Model]")
-
+AnyModel = TypeVar("AnyModel", bound = "type[Model]")
 
 class Model:
     _model_classes: dict[str, type[Model]] = {}
@@ -108,8 +105,8 @@ class Model:
                 self.ftype = gguf.LlamaFileType.MOSTLY_BF16
 
         # Configure GGUF Writer
-        self.gguf_writer = gguf.GGUFWriter(path=None, arch=gguf.MODEL_ARCH_NAMES[self.model_arch], endianess=self.endianess, use_temp_file=self.use_temp_file,
-                                           split_max_tensors=split_max_tensors, split_max_size=split_max_size, dry_run=dry_run, small_first_shard=small_first_shard)
+        self.gguf_writer = gguf.GGUFWriter(path = None, arch = gguf.MODEL_ARCH_NAMES[self.model_arch], endianess = self.endianess, use_temp_file = self.use_temp_file,
+                                           split_max_tensors = split_max_tensors, split_max_size = split_max_size, dry_run = dry_run, small_first_shard = small_first_shard)
 
     @classmethod
     def __init_subclass__(cls):
@@ -139,7 +136,7 @@ class Model:
         if index_file.is_file():
             self.tensor_names = set()
             logger.info(f"gguf: loading model weight map from '{index_name}'")
-            with open(index_file, "r", encoding="utf-8") as f:
+            with open(index_file, "r", encoding = "utf-8") as f:
                 index: dict[str, Any] = json.load(f)
                 weight_map = index.get("weight_map")
                 if weight_map is None or not isinstance(weight_map, dict):
@@ -154,9 +151,9 @@ class Model:
             ctx: ContextManager[Any]
             if self.is_safetensors:
                 from safetensors import safe_open
-                ctx = cast(ContextManager[Any], safe_open(self.dir_model / part_name, framework="pt", device="cpu"))
+                ctx = cast(ContextManager[Any], safe_open(self.dir_model / part_name, framework = "pt", device = "cpu"))
             else:
-                ctx = contextlib.nullcontext(torch.load(str(self.dir_model / part_name), map_location="cpu", mmap=True, weights_only=True))
+                ctx = contextlib.nullcontext(torch.load(str(self.dir_model / part_name), map_location = "cpu", mmap = True, weights_only = True))
 
             with ctx as model_part:
                 tensor_names_from_parts.update(model_part.keys())
@@ -192,7 +189,7 @@ class Model:
         name: str = gguf.TENSOR_NAMES[key]
         if "{bid}" in name:
             assert bid is not None
-            name = name.format(bid=bid)
+            name = name.format(bid = bid)
         return name + suffix
 
     def match_model_tensor_name(self, name: str, key: gguf.MODEL_TENSOR, bid: int | None, suffix: str = ".weight") -> bool:
@@ -202,14 +199,14 @@ class Model:
         if "{bid}" in key_name:
             if bid is None:
                 return False
-            key_name = key_name.format(bid=bid)
+            key_name = key_name.format(bid = bid)
         else:
             if bid is not None:
                 return False
         return name == (key_name + suffix)
 
     def map_tensor_name(self, name: str, try_suffixes: Sequence[str] = (".weight", ".bias")) -> str:
-        new_name = self.tensor_map.get_name(key=name, try_suffixes=try_suffixes)
+        new_name = self.tensor_map.get_name(key = name, try_suffixes = try_suffixes)
         if new_name is None:
             raise ValueError(f"Can not map tensor {name!r}")
         return new_name
@@ -217,19 +214,19 @@ class Model:
     def set_gguf_parameters(self):
         self.gguf_writer.add_block_count(self.block_count)
 
-        if (n_ctx := self.find_hparam(["max_position_embeddings", "n_ctx"], optional=True)) is not None:
+        if (n_ctx := self.find_hparam(["max_position_embeddings", "n_ctx"], optional = True)) is not None:
             self.gguf_writer.add_context_length(n_ctx)
             logger.info(f"gguf: context length = {n_ctx}")
 
-        if (n_embd := self.find_hparam(["hidden_size", "n_embd"], optional=True)) is not None:
+        if (n_embd := self.find_hparam(["hidden_size", "n_embd"], optional = True)) is not None:
             self.gguf_writer.add_embedding_length(n_embd)
             logger.info(f"gguf: embedding length = {n_embd}")
 
-        if (n_ff := self.find_hparam(["intermediate_size", "n_inner"], optional=True)) is not None:
+        if (n_ff := self.find_hparam(["intermediate_size", "n_inner"], optional = True)) is not None:
             self.gguf_writer.add_feed_forward_length(n_ff)
             logger.info(f"gguf: feed forward length = {n_ff}")
 
-        if (n_head := self.find_hparam(["num_attention_heads", "n_head"], optional=True)) is not None:
+        if (n_head := self.find_hparam(["num_attention_heads", "n_head"], optional = True)) is not None:
             self.gguf_writer.add_head_count(n_head)
             logger.info(f"gguf: head count = {n_head}")
 
@@ -243,7 +240,7 @@ class Model:
         if (f_rms_eps := self.hparams.get("rms_norm_eps")) is not None:
             self.gguf_writer.add_layer_norm_rms_eps(f_rms_eps)
             logger.info(f"gguf: rms norm epsilon = {f_rms_eps}")
-        if (f_norm_eps := self.find_hparam(["layer_norm_eps", "layer_norm_epsilon", "norm_epsilon"], optional=True)) is not None:
+        if (f_norm_eps := self.find_hparam(["layer_norm_eps", "layer_norm_epsilon", "norm_epsilon"], optional = True)) is not None:
             self.gguf_writer.add_layer_norm_eps(f_norm_eps)
             logger.info(f"gguf: layer norm epsilon = {f_norm_eps}")
         if (n_experts := self.hparams.get("num_local_experts")) is not None:
@@ -381,7 +378,7 @@ class Model:
                 # n_dims is implicit in the shape
                 logger.info(f"{f'%-{max_name_len}s' % f'{new_name},'} {old_dtype} --> {data_qtype.name}, shape = {shape_str}")
 
-                self.gguf_writer.add_tensor(new_name, data, raw_dtype=data_qtype)
+                self.gguf_writer.add_tensor(new_name, data, raw_dtype = data_qtype)
 
     def set_type(self):
         self.gguf_writer.add_type(gguf.GGUFType.MODEL)
@@ -407,9 +404,9 @@ class Model:
         if self.fname_out.is_dir():
             # Generate default filename based on model specification and available metadata
             if not vocab_only:
-                fname_default: str = gguf.naming_convention(self.metadata.name, self.metadata.basename, self.metadata.finetune, self.metadata.version, self.metadata.size_label, output_type, model_type="LoRA" if total_params < 0 else None)
+                fname_default: str = gguf.naming_convention(self.metadata.name, self.metadata.basename, self.metadata.finetune, self.metadata.version, self.metadata.size_label, output_type, model_type = "LoRA" if total_params < 0 else None)
             else:
-                fname_default: str = gguf.naming_convention(self.metadata.name, self.metadata.basename, self.metadata.finetune, self.metadata.version, size_label=None, output_type=None, model_type="vocab")
+                fname_default: str = gguf.naming_convention(self.metadata.name, self.metadata.basename, self.metadata.finetune, self.metadata.version, size_label = None, output_type = None, model_type = "vocab")
 
             # Use the default filename
             self.fname_out = self.fname_out / f"{fname_default}.gguf"
@@ -437,18 +434,18 @@ class Model:
 
     def write(self):
         self.prepare_tensors()
-        self.prepare_metadata(vocab_only=False)
-        self.gguf_writer.write_header_to_file(path=self.fname_out)
+        self.prepare_metadata(vocab_only = False)
+        self.gguf_writer.write_header_to_file(path = self.fname_out)
         self.gguf_writer.write_kv_data_to_file()
-        self.gguf_writer.write_tensors_to_file(progress=True)
+        self.gguf_writer.write_tensors_to_file(progress = True)
         self.gguf_writer.close()
 
     def write_vocab(self):
         if len(self.gguf_writer.tensors) != 1:
             raise ValueError('Splitting the vocabulary is not supported')
 
-        self.prepare_metadata(vocab_only=True)
-        self.gguf_writer.write_header_to_file(path=self.fname_out)
+        self.prepare_metadata(vocab_only = True)
+        self.gguf_writer.write_header_to_file(path = self.fname_out)
         self.gguf_writer.write_kv_data_to_file()
         self.gguf_writer.close()
 
@@ -465,7 +462,7 @@ class Model:
 
     @staticmethod
     def load_hparams(dir_model: Path):
-        with open(dir_model / "config.json", "r", encoding="utf-8") as f:
+        with open(dir_model / "config.json", "r", encoding = "utf-8") as f:
             return json.load(f)
 
     @classmethod
@@ -476,6 +473,7 @@ class Model:
             for name in names:
                 cls._model_classes[name] = modelcls
             return modelcls
+
         return func
 
     @classmethod
@@ -492,9 +490,9 @@ class Model:
 
     def does_token_look_special(self, token: str | bytes) -> bool:
         if isinstance(token, (bytes, bytearray)):
-            token_text = token.decode(encoding="utf-8")
+            token_text = token.decode(encoding = "utf-8")
         elif isinstance(token, memoryview):
-            token_text = token.tobytes().decode(encoding="utf-8")
+            token_text = token.tobytes().decode(encoding = "utf-8")
         else:
             token_text = token
 
@@ -539,7 +537,7 @@ class Model:
                     # To avoid unexpected issues - we make sure to normalize non-normalized tokens
                     if not tokenizer.added_tokens_decoder[i].normalized:
                         previous_token = token
-                        token = tokenizer.decode(tokenizer.encode(token, add_special_tokens=False))
+                        token = tokenizer.decode(tokenizer.encode(token, add_special_tokens = False))
                         if previous_token != token:
                             logger.info(f"{repr(previous_token)} is encoded and decoded back to {repr(token)} using AutoTokenizer")
 
@@ -734,7 +732,7 @@ class Model:
         self.gguf_writer.add_token_list(tokens)
         self.gguf_writer.add_token_types(toktypes)
 
-        special_vocab = gguf.SpecialVocab(self.dir_model, load_merges=True)
+        special_vocab = gguf.SpecialVocab(self.dir_model, load_merges = True)
         special_vocab.add_to_gguf(self.gguf_writer)
 
     def _set_vocab_qwen(self):
@@ -744,7 +742,7 @@ class Model:
         toktypes: list[int] = []
 
         from transformers import AutoTokenizer
-        tokenizer = AutoTokenizer.from_pretrained(dir_model, trust_remote_code=True)
+        tokenizer = AutoTokenizer.from_pretrained(dir_model, trust_remote_code = True)
         vocab_size = hparams["vocab_size"]
         assert max(tokenizer.get_vocab().values()) < vocab_size
 
@@ -757,13 +755,13 @@ class Model:
             vocab[QwenModel.token_bytes_to_string(token)] = rank
             if len(token) == 1:
                 continue
-            merged = QwenModel.bpe(mergeable_ranks, token, max_rank=rank)
+            merged = QwenModel.bpe(mergeable_ranks, token, max_rank = rank)
             assert len(merged) == 2
             merges.append(' '.join(map(QwenModel.token_bytes_to_string, merged)))
 
         # for this kind of tokenizer, added_vocab is not a subset of vocab, so they need to be combined
         added_vocab = tokenizer.special_tokens
-        reverse_vocab = {id_ : encoded_tok for encoded_tok, id_ in {**vocab, **added_vocab}.items()}
+        reverse_vocab = {id_: encoded_tok for encoded_tok, id_ in {**vocab, **added_vocab}.items()}
 
         for i in range(vocab_size):
             if i not in reverse_vocab:
@@ -781,7 +779,7 @@ class Model:
         self.gguf_writer.add_token_list(tokens)
         self.gguf_writer.add_token_types(toktypes)
 
-        special_vocab = gguf.SpecialVocab(dir_model, load_merges=False)
+        special_vocab = gguf.SpecialVocab(dir_model, load_merges = False)
         special_vocab.merges = merges
         # only add special tokens when they were not already loaded from config.json
         if len(special_vocab.special_token_ids) == 0:
@@ -791,7 +789,7 @@ class Model:
         special_vocab._set_special_token("unk", tokenizer.special_tokens["<|endoftext|>"])
         special_vocab.add_to_gguf(self.gguf_writer)
 
-    def _set_vocab_sentencepiece(self, add_to_gguf=True):
+    def _set_vocab_sentencepiece(self, add_to_gguf = True):
         tokens, scores, toktypes = self._create_vocab_sentencepiece()
 
         self.gguf_writer.add_tokenizer_model("llama")
@@ -800,7 +798,7 @@ class Model:
         self.gguf_writer.add_token_scores(scores)
         self.gguf_writer.add_token_types(toktypes)
 
-        special_vocab = gguf.SpecialVocab(self.dir_model, n_vocab=len(tokens))
+        special_vocab = gguf.SpecialVocab(self.dir_model, n_vocab = len(tokens))
         special_vocab.add_to_gguf(self.gguf_writer)
 
     def _create_vocab_sentencepiece(self):
@@ -841,7 +839,7 @@ class Model:
 
         added_tokens_file = self.dir_model / 'added_tokens.json'
         if added_tokens_file.is_file():
-            with open(added_tokens_file, "r", encoding="utf-8") as f:
+            with open(added_tokens_file, "r", encoding = "utf-8") as f:
                 added_tokens_json = json.load(f)
                 for key in added_tokens_json:
                     token_id = added_tokens_json[key]
@@ -855,7 +853,7 @@ class Model:
 
         tokenizer_config_file = self.dir_model / 'tokenizer_config.json'
         if tokenizer_config_file.is_file():
-            with open(tokenizer_config_file, "r", encoding="utf-8") as f:
+            with open(tokenizer_config_file, "r", encoding = "utf-8") as f:
                 tokenizer_config_json = json.load(f)
                 added_tokens_decoder = tokenizer_config_json.get("added_tokens_decoder", {})
                 for token_id, token_data in added_tokens_decoder.items():
@@ -877,7 +875,7 @@ class Model:
             pad_count = vocab_size - len(tokens)
             logger.debug(f"Padding vocab with {pad_count} token(s) - [PAD1] through [PAD{pad_count}]")
             for i in range(1, pad_count + 1):
-                tokens.append(bytes(f"[PAD{i}]", encoding="utf-8"))
+                tokens.append(bytes(f"[PAD{i}]", encoding = "utf-8"))
                 scores.append(-1000.0)
                 toktypes.append(SentencePieceTokenTypes.UNUSED)
 
@@ -902,7 +900,7 @@ class Model:
         self.gguf_writer.add_token_scores(scores)
         self.gguf_writer.add_token_types(toktypes)
 
-        special_vocab = gguf.SpecialVocab(self.dir_model, n_vocab=len(tokens))
+        special_vocab = gguf.SpecialVocab(self.dir_model, n_vocab = len(tokens))
         special_vocab.add_to_gguf(self.gguf_writer)
 
     def _set_vocab_builtin(self, model_name: Literal["gpt-neox", "llama-spm"], vocab_size: int):
@@ -950,7 +948,6 @@ class Model:
         if (field := vocab_reader.get_field(gguf.Keys.Tokenizer.ADD_EOS)) is not None:
             self.gguf_writer.add_add_eos_token(field.parts[-1].tolist()[0])
 
-
 @Model.register("GPTNeoXForCausalLM")
 class GPTNeoXModel(Model):
     model_arch = gguf.MODEL_ARCH.GPTNEOX
@@ -984,29 +981,28 @@ class GPTNeoXModel(Model):
             qkv_weights = data_torch.reshape((n_head, 3, n_embed // n_head, n_embed))
             data_torch = torch.cat(
                 (
-                    qkv_weights[:, 0, :, :].reshape((-1, n_embed)),
-                    qkv_weights[:, 1, :, :].reshape((-1, n_embed)),
-                    qkv_weights[:, 2, :, :].reshape((-1, n_embed)),
+                    qkv_weights[:, 0,:,:].reshape((-1, n_embed)),
+                    qkv_weights[:, 1,:,:].reshape((-1, n_embed)),
+                    qkv_weights[:, 2,:,:].reshape((-1, n_embed)),
                 ),
-                dim=0,
+                dim = 0,
             )
             logger.info("re-format attention.linear_qkv.weight")
         elif re.match(r"gpt_neox\.layers\.\d+\.attention\.query_key_value\.bias", name):
             qkv_bias = data_torch.reshape((n_head, 3, n_embed // n_head))
             data_torch = torch.cat(
                 (
-                    qkv_bias[:, 0, :].reshape((n_embed,)),
-                    qkv_bias[:, 1, :].reshape((n_embed,)),
-                    qkv_bias[:, 2, :].reshape((n_embed,)),
+                    qkv_bias[:, 0,:].reshape((n_embed,)),
+                    qkv_bias[:, 1,:].reshape((n_embed,)),
+                    qkv_bias[:, 2,:].reshape((n_embed,)),
                 ),
-                dim=0,
+                dim = 0,
             )
             logger.info("re-format attention.linear_qkv.bias")
 
         tensors.append((self.map_tensor_name(name), data_torch))
 
         return tensors
-
 
 @Model.register("BloomForCausalLM", "BloomModel")
 class BloomModel(Model):
@@ -1041,22 +1037,22 @@ class BloomModel(Model):
             qkv_weights = data_torch.reshape((n_head, 3, n_embed // n_head, n_embed))
             data_torch = torch.cat(
                 (
-                    qkv_weights[:, 0, :, :].reshape((-1, n_embed)),
-                    qkv_weights[:, 1, :, :].reshape((-1, n_embed)),
-                    qkv_weights[:, 2, :, :].reshape((-1, n_embed)),
+                    qkv_weights[:, 0,:,:].reshape((-1, n_embed)),
+                    qkv_weights[:, 1,:,:].reshape((-1, n_embed)),
+                    qkv_weights[:, 2,:,:].reshape((-1, n_embed)),
                 ),
-                dim=0,
+                dim = 0,
             )
             logger.info("re-format attention.linear_qkv.weight")
         elif re.match(r"h\.\d+\.self_attention\.query_key_value\.bias", name):
             qkv_bias = data_torch.reshape((n_head, 3, n_embed // n_head))
             data_torch = torch.cat(
                 (
-                    qkv_bias[:, 0, :].reshape((n_embed,)),
-                    qkv_bias[:, 1, :].reshape((n_embed,)),
-                    qkv_bias[:, 2, :].reshape((n_embed,)),
+                    qkv_bias[:, 0,:].reshape((n_embed,)),
+                    qkv_bias[:, 1,:].reshape((n_embed,)),
+                    qkv_bias[:, 2,:].reshape((n_embed,)),
                 ),
-                dim=0,
+                dim = 0,
             )
             logger.info("re-format attention.linear_qkv.bias")
 
@@ -1070,7 +1066,6 @@ class BloomModel(Model):
                 tensors.append((self.format_tensor_name(gguf.MODEL_TENSOR.OUTPUT), data_torch))
 
         return tensors
-
 
 @Model.register("MPTForCausalLM")
 class MPTModel(Model):
@@ -1108,13 +1103,12 @@ class MPTModel(Model):
         del bid  # unused
 
         if "scales" in name:
-            new_name = self.map_tensor_name(name, try_suffixes=(".weight", ".bias", ".scales"))
+            new_name = self.map_tensor_name(name, try_suffixes = (".weight", ".bias", ".scales"))
             new_name = new_name.replace("scales", "act.scales")
         else:
-            new_name = self.map_tensor_name(name, try_suffixes=(".weight", ".bias"))
+            new_name = self.map_tensor_name(name, try_suffixes = (".weight", ".bias"))
 
         return [(new_name, data_torch)]
-
 
 @Model.register("OrionForCausalLM")
 class OrionModel(Model):
@@ -1149,7 +1143,6 @@ class OrionModel(Model):
         # note: config provides rms norm but it is actually layer norm
         # ref:  https://huggingface.co/OrionStarAI/Orion-14B-Chat/blob/276a17221ce42beb45f66fac657a41540e71f4f5/modeling_orion.py#L570-L571
         self.gguf_writer.add_layer_norm_eps(self.hparams["rms_norm_eps"])
-
 
 @Model.register("BaichuanForCausalLM", "BaiChuanForCausalLM")
 class BaichuanModel(Model):
@@ -1230,7 +1223,6 @@ class BaichuanModel(Model):
         r = weights.shape[0] // 3
         return weights[r * n_part:r * n_part + r, ...]
 
-
 @Model.register("XverseForCausalLM")
 class XverseModel(Model):
     model_arch = gguf.MODEL_ARCH.XVERSE
@@ -1279,7 +1271,7 @@ class XverseModel(Model):
         self.gguf_writer.add_token_list(tokens)
         self.gguf_writer.add_token_types(toktypes)
 
-        special_vocab = gguf.SpecialVocab(dir_model, n_vocab=len(tokens))
+        special_vocab = gguf.SpecialVocab(dir_model, n_vocab = len(tokens))
         special_vocab.add_to_gguf(self.gguf_writer)
 
     def set_gguf_parameters(self):
@@ -1337,7 +1329,6 @@ class XverseModel(Model):
             .reshape(weights.shape)
         )
 
-
 @Model.register("FalconForCausalLM", "RWForCausalLM")
 class FalconModel(Model):
     model_arch = gguf.MODEL_ARCH.FALCON
@@ -1380,17 +1371,16 @@ class FalconModel(Model):
 
         if "query_key_value" in name:
             n_head = self.find_hparam(["num_attention_heads", "n_head"])
-            n_head_kv = self.find_hparam(["num_kv_heads", "n_head_kv"], optional=True) or 1
+            n_head_kv = self.find_hparam(["num_kv_heads", "n_head_kv"], optional = True) or 1
             head_dim = self.hparams["hidden_size"] // n_head
 
             qkv = data_torch.view(n_head_kv, n_head // n_head_kv + 2, head_dim, head_dim * n_head)
-            q = qkv[:, :-2].reshape(n_head * head_dim, head_dim * n_head)
+            q = qkv[:,:-2].reshape(n_head * head_dim, head_dim * n_head)
             k = qkv[:, [-2]].reshape(n_head_kv * head_dim, head_dim * n_head)
             v = qkv[:, [-1]].reshape(n_head_kv * head_dim, head_dim * n_head)
             data_torch = torch.cat((q, k, v)).reshape_as(data_torch)
 
         return [(self.map_tensor_name(name), data_torch)]
-
 
 @Model.register("GPTBigCodeForCausalLM")
 class StarCoderModel(Model):
@@ -1408,7 +1398,6 @@ class StarCoderModel(Model):
         self.gguf_writer.add_layer_norm_eps(self.hparams["layer_norm_epsilon"])
         self.gguf_writer.add_file_type(self.ftype)
 
-
 @Model.register("GPTRefactForCausalLM")
 class RefactModel(Model):
     model_arch = gguf.MODEL_ARCH.REFACT
@@ -1417,7 +1406,7 @@ class RefactModel(Model):
         super().set_vocab()
 
         # TODO: how to determine special FIM tokens automatically?
-        special_vocab = gguf.SpecialVocab(self.dir_model, load_merges=False,
+        special_vocab = gguf.SpecialVocab(self.dir_model, load_merges = False,
                                           special_token_types = ['prefix', 'suffix', 'middle', 'eot'])
         special_vocab._set_special_token("prefix", 1)
         special_vocab._set_special_token("suffix", 3)
@@ -1471,7 +1460,6 @@ class RefactModel(Model):
             tensors.append((self.map_tensor_name(name), data_torch))
 
         return tensors
-
 
 @Model.register("StableLmForCausalLM", "StableLMEpochForCausalLM", "LlavaStableLMEpochForCausalLM")
 class StableLMModel(Model):
@@ -1542,7 +1530,7 @@ class StableLMModel(Model):
             ename = f"model.layers.{bid}.self_attn.{layer_name}.norms.{xid}.weight"
             datas.append(norms[ename])
             del norms[ename]
-        data_torch = torch.stack(datas, dim=0)
+        data_torch = torch.stack(datas, dim = 0)
 
         merged_name = f"model.layers.{bid}.self_attn.{layer_name}.weight"
         new_name = self.map_tensor_name(merged_name)
@@ -1562,7 +1550,6 @@ class StableLMModel(Model):
             if len(norms) > 0:
                 raise ValueError(f"Unprocessed norms: {norms}")
 
-
 @Model.register("LLaMAForCausalLM", "LlamaForCausalLM", "MistralForCausalLM", "MixtralForCausalLM")
 class LlamaModel(Model):
     model_arch = gguf.MODEL_ARCH.LLAMA
@@ -1580,18 +1567,18 @@ class LlamaModel(Model):
         # Apply to CodeLlama only (and ignore for Llama 3 with a vocab size of 128256)
         if self.hparams.get("vocab_size", 32000) == 32016:
             special_vocab = gguf.SpecialVocab(
-                self.dir_model, load_merges=False,
+                self.dir_model, load_merges = False,
                 special_token_types = ['prefix', 'suffix', 'middle', 'eot']
             )
             special_vocab._set_special_token("prefix", 32007)
             special_vocab._set_special_token("suffix", 32008)
             special_vocab._set_special_token("middle", 32009)
-            special_vocab._set_special_token("eot",    32010)
+            special_vocab._set_special_token("eot", 32010)
             special_vocab.add_to_gguf(self.gguf_writer)
 
         tokenizer_config_file = self.dir_model / 'tokenizer_config.json'
         if tokenizer_config_file.is_file():
-            with open(tokenizer_config_file, "r", encoding="utf-8") as f:
+            with open(tokenizer_config_file, "r", encoding = "utf-8") as f:
                 tokenizer_config_json = json.load(f)
                 if "add_prefix_space" in tokenizer_config_json:
                     self.gguf_writer.add_add_space_prefix(tokenizer_config_json["add_prefix_space"])
@@ -1658,7 +1645,7 @@ class LlamaModel(Model):
                         datas.append(self._experts[bid][ename])
                         del self._experts[bid][ename]
 
-                    data_torch = torch.stack(datas, dim=0)
+                    data_torch = torch.stack(datas, dim = 0)
 
                     merged_name = f"layers.{bid}.feed_forward.experts.{wid}.weight"
 
@@ -1672,11 +1659,11 @@ class LlamaModel(Model):
         return [(self.map_tensor_name(name), data_torch)]
 
     def generate_extra_tensors(self) -> Iterable[tuple[str, Tensor]]:
-        if rope_scaling := self.find_hparam(["rope_scaling"], optional=True):
+        if rope_scaling := self.find_hparam(["rope_scaling"], optional = True):
             if rope_scaling.get("rope_type", '').lower() == "llama3":
                 base = self.hparams.get("rope_theta", 10000.0)
                 dim = self.hparams.get("head_dim", self.hparams["hidden_size"] // self.hparams["num_attention_heads"])
-                freqs = 1.0 / (base ** (torch.arange(0, dim, 2, dtype=torch.float32) / dim))
+                freqs = 1.0 / (base ** (torch.arange(0, dim, 2, dtype = torch.float32) / dim))
 
                 factor = rope_scaling.get("factor", 8.0)
                 low_freq_factor = rope_scaling.get("low_freq_factor", 1.0)
@@ -1698,7 +1685,7 @@ class LlamaModel(Model):
                         smooth = (old_context_len / wavelen - low_freq_factor) / (high_freq_factor - low_freq_factor)
                         rope_factors.append(1 / ((1 - smooth) / factor + smooth))
 
-                yield (self.format_tensor_name(gguf.MODEL_TENSOR.ROPE_FREQS), torch.tensor(rope_factors, dtype=torch.float32))
+                yield (self.format_tensor_name(gguf.MODEL_TENSOR.ROPE_FREQS), torch.tensor(rope_factors, dtype = torch.float32))
 
     def prepare_tensors(self):
         super().prepare_tensors()
@@ -1708,7 +1695,6 @@ class LlamaModel(Model):
             experts = [k for d in self._experts for k in d.keys()]
             if len(experts) > 0:
                 raise ValueError(f"Unprocessed experts: {experts}")
-
 
 @Model.register("DeciLMForCausalLM")
 class DeciModel(Model):
@@ -1730,8 +1716,8 @@ class DeciModel(Model):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        if "block_configs" in self.hparams: # Llama-3_1-Nemotron-51B
-            _block_configs: list[dict[str,Any]] = self.hparams["block_configs"]
+        if "block_configs" in self.hparams:  # Llama-3_1-Nemotron-51B
+            _block_configs: list[dict[str, Any]] = self.hparams["block_configs"]
             assert self.block_count == len(_block_configs)
             self._num_kv_heads = list()
             self._num_heads = list()
@@ -1779,14 +1765,14 @@ class DeciModel(Model):
             self.gguf_writer.add_token_list(tokens)
             self.gguf_writer.add_token_types(toktypes)
 
-            special_vocab = gguf.SpecialVocab(self.dir_model, load_merges=True)
+            special_vocab = gguf.SpecialVocab(self.dir_model, load_merges = True)
             special_vocab.add_to_gguf(self.gguf_writer)
         else:
             # DeciLM-7B
             self._set_vocab_llama_hf()
 
     def set_gguf_parameters(self):
-        if "block_configs" in self.hparams: # Llama-3_1-Nemotron-51B
+        if "block_configs" in self.hparams:  # Llama-3_1-Nemotron-51B
             assert self.block_count == len(self._num_kv_heads)
             assert self.block_count == len(self._num_heads)
             assert self.block_count == len(self._ffn_dims)
@@ -1802,9 +1788,9 @@ class DeciModel(Model):
             self.gguf_writer.add_key_length(self.hparams["hidden_size"] // self.hparams["num_attention_heads"])
             self.gguf_writer.add_value_length(self.hparams["hidden_size"] // self.hparams["num_attention_heads"])
             self.gguf_writer.add_file_type(self.ftype)
-        else: # DeciLM-7B
+        else:  # DeciLM-7B
             super().set_gguf_parameters()
-            if "num_key_value_heads_per_layer" in self.hparams: # DeciLM-7B
+            if "num_key_value_heads_per_layer" in self.hparams:  # DeciLM-7B
                 self._num_kv_heads: list[int] = self.hparams["num_key_value_heads_per_layer"]
                 assert self.block_count == len(self._num_kv_heads)
                 self.gguf_writer.add_head_count_kv(self._num_kv_heads)
@@ -1850,11 +1836,11 @@ class DeciModel(Model):
         return [(self.map_tensor_name(name), data_torch)]
 
     def generate_extra_tensors(self) -> Iterable[tuple[str, Tensor]]:
-        if rope_scaling := self.find_hparam(["rope_scaling"], optional=True):
+        if rope_scaling := self.find_hparam(["rope_scaling"], optional = True):
             if rope_scaling.get("rope_type", '').lower() == "llama3":
                 base = self.hparams.get("rope_theta", 10000.0)
                 dim = self.hparams.get("head_dim", self.hparams["hidden_size"] // self.hparams["num_attention_heads"])
-                freqs = 1.0 / (base ** (torch.arange(0, dim, 2, dtype=torch.float32) / dim))
+                freqs = 1.0 / (base ** (torch.arange(0, dim, 2, dtype = torch.float32) / dim))
 
                 factor = rope_scaling.get("factor", 8.0)
                 low_freq_factor = rope_scaling.get("low_freq_factor", 1.0)
@@ -1876,11 +1862,10 @@ class DeciModel(Model):
                         smooth = (old_context_len / wavelen - low_freq_factor) / (high_freq_factor - low_freq_factor)
                         rope_factors.append(1 / ((1 - smooth) / factor + smooth))
 
-                yield (self.format_tensor_name(gguf.MODEL_TENSOR.ROPE_FREQS), torch.tensor(rope_factors, dtype=torch.float32))
+                yield (self.format_tensor_name(gguf.MODEL_TENSOR.ROPE_FREQS), torch.tensor(rope_factors, dtype = torch.float32))
 
     def prepare_tensors(self):
         super().prepare_tensors()
-
 
 @Model.register("BitnetForCausalLM")
 class BitnetModel(Model):
@@ -1897,7 +1882,7 @@ class BitnetModel(Model):
     def weight_quant(self, weight: Tensor) -> Tensor:
         dtype = weight.dtype
         weight = weight.float()
-        scale = weight.abs().mean().clamp(min=1e-5)
+        scale = weight.abs().mean().clamp(min = 1e-5)
         iscale = 1 / scale
         # TODO: multiply by the scale directly instead of inverting it twice
         # (this is also unnecessarily doubly inverted upstream)
@@ -1921,7 +1906,6 @@ class BitnetModel(Model):
             data_torch = self.weight_quant(data_torch)
 
         yield (new_name, data_torch)
-
 
 @Model.register("GrokForCausalLM")
 class GrokModel(Model):
@@ -1962,7 +1946,7 @@ class GrokModel(Model):
                         datas.append(self._experts[bid][ename])
                         del self._experts[bid][ename]
 
-                    data_torch = torch.stack(datas, dim=0)
+                    data_torch = torch.stack(datas, dim = 0)
 
                     merged_name = f"transformer.decoder_layer.{bid}.moe.{wid}.weight"
 
@@ -1974,7 +1958,6 @@ class GrokModel(Model):
                 return []
 
         return [(self.map_tensor_name(name), data_torch)]
-
 
 @Model.register("DbrxForCausalLM")
 class DbrxModel(Model):
@@ -2016,9 +1999,9 @@ class DbrxModel(Model):
         # But llama.cpp moe graph works differently
         # AND the dimensions in ggml are typically in the reverse order of the pytorch dimensions
         # so (n_expert, n_ff, n_embd) in pytorch is {n_embd, n_ff, n_expert} in ggml_tensor
-        exp_tensor_names = {"ffn.experts.mlp.w1": None,       # LLM_TENSOR_FFN_GATE_EXPS ggml_tensor->ne{n_embd, n_ff,   n_expert}
+        exp_tensor_names = {"ffn.experts.mlp.w1": None,  # LLM_TENSOR_FFN_GATE_EXPS ggml_tensor->ne{n_embd, n_ff,   n_expert}
                             "ffn.experts.mlp.w2": (0, 2, 1),  # LLM_TENSOR_FFN_DOWN_EXPS ggml_tensor->ne{n_ff,   n_embd, n_expert}
-                            "ffn.experts.mlp.v1": None}       # LLM_TENSOR_FFN_UP_EXPS   ggml_tensor->ne{n_embd, n_ff,   n_expert}
+                            "ffn.experts.mlp.v1": None}  # LLM_TENSOR_FFN_UP_EXPS   ggml_tensor->ne{n_embd, n_ff,   n_expert}
         experts = False
 
         for exp_tensor_name in exp_tensor_names.keys():
@@ -2035,7 +2018,7 @@ class DbrxModel(Model):
         # Every other model has the weight names ending in .weight,
         # let's assume that is the convention which is not the case for dbrx:
         # https://huggingface.co/databricks/dbrx-instruct/blob/main/model.safetensors.index.json#L15
-        new_name = self.map_tensor_name(name if not experts else name + ".weight", try_suffixes=(".weight",))
+        new_name = self.map_tensor_name(name if not experts else name + ".weight", try_suffixes = (".weight",))
 
         return [(new_name, data_torch)]
 
@@ -2043,7 +2026,6 @@ class DbrxModel(Model):
         del name, new_name, bid  # unused
 
         return n_dims > 1
-
 
 @Model.register("MiniCPMForCausalLM")
 class MiniCPMModel(Model):
@@ -2079,8 +2061,8 @@ class MiniCPMModel(Model):
             if len(long_factors) != len(short_factors) or len(long_factors) != rope_dims / 2:
                 raise ValueError(f'The length of rope long and short factors must be {rope_dims / 2}')
 
-            yield (self.format_tensor_name(gguf.MODEL_TENSOR.ROPE_FACTORS_LONG), torch.tensor(long_factors, dtype=torch.float32))
-            yield (self.format_tensor_name(gguf.MODEL_TENSOR.ROPE_FACTORS_SHORT), torch.tensor(short_factors, dtype=torch.float32))
+            yield (self.format_tensor_name(gguf.MODEL_TENSOR.ROPE_FACTORS_LONG), torch.tensor(long_factors, dtype = torch.float32))
+            yield (self.format_tensor_name(gguf.MODEL_TENSOR.ROPE_FACTORS_SHORT), torch.tensor(short_factors, dtype = torch.float32))
 
     def set_vocab(self):
         self._set_vocab_sentencepiece()
@@ -2098,7 +2080,6 @@ class MiniCPMModel(Model):
             data_torch = LlamaModel.permute(data_torch, n_head, n_kv_head)
 
         return [(self.map_tensor_name(name), data_torch)]
-
 
 @Model.register("MiniCPM3ForCausalLM")
 class MiniCPM3Model(Model):
@@ -2136,8 +2117,8 @@ class MiniCPM3Model(Model):
             if len(long_factors) != len(short_factors) or len(long_factors) != rope_dims / 2:
                 raise ValueError(f'The length of rope long and short factors must be {rope_dims / 2}')
 
-            yield (self.format_tensor_name(gguf.MODEL_TENSOR.ROPE_FACTORS_LONG), torch.tensor(long_factors, dtype=torch.float32))
-            yield (self.format_tensor_name(gguf.MODEL_TENSOR.ROPE_FACTORS_SHORT), torch.tensor(short_factors, dtype=torch.float32))
+            yield (self.format_tensor_name(gguf.MODEL_TENSOR.ROPE_FACTORS_LONG), torch.tensor(long_factors, dtype = torch.float32))
+            yield (self.format_tensor_name(gguf.MODEL_TENSOR.ROPE_FACTORS_SHORT), torch.tensor(short_factors, dtype = torch.float32))
 
     def set_vocab(self):
         self._set_vocab_sentencepiece()
@@ -2151,7 +2132,6 @@ class MiniCPM3Model(Model):
             .swapaxes(1, 2)
             .reshape(weights.shape)
         )
-
 
 @Model.register("QWenLMHeadModel")
 class QwenModel(Model):
@@ -2194,7 +2174,6 @@ class QwenModel(Model):
         self.gguf_writer.add_layer_norm_rms_eps(self.hparams["layer_norm_epsilon"])
         self.gguf_writer.add_file_type(self.ftype)
 
-
 @Model.register("Qwen2ForCausalLM")
 class Qwen2Model(Model):
     model_arch = gguf.MODEL_ARCH.QWEN2
@@ -2212,7 +2191,6 @@ class Qwen2Model(Model):
                 self.gguf_writer.add_rope_scaling_type(gguf.RopeScalingType.YARN)
                 self.gguf_writer.add_rope_scaling_factor(self.hparams["rope_scaling"]["factor"])
                 self.gguf_writer.add_rope_scaling_orig_ctx_len(self.hparams["rope_scaling"]["original_max_position_embeddings"])
-
 
 @Model.register("Qwen2VLForConditionalGeneration")
 class Qwen2VLModel(Model):
@@ -2235,7 +2213,6 @@ class Qwen2VLModel(Model):
             if name.startswith("visual."):
                 continue
             yield name, data
-
 
 @Model.register("WavTokenizerDec")
 class WavTokenizerDecModel(Model):
@@ -2273,7 +2250,6 @@ class WavTokenizerDecModel(Model):
         self.gguf_writer.add_convnext_block_count     (self.hparams["convnext"]["n_layer"])
 
         self.gguf_writer.add_causal_attention(False)
-
 
 @Model.register("Qwen2MoeForCausalLM")
 class Qwen2MoeModel(Model):
@@ -2315,7 +2291,7 @@ class Qwen2MoeModel(Model):
                         datas.append(self._experts[bid][ename])
                         del self._experts[bid][ename]
 
-                    data_torch = torch.stack(datas, dim=0)
+                    data_torch = torch.stack(datas, dim = 0)
 
                     merged_name = f"model.layers.{bid}.mlp.experts.{w_name}.weight"
 
@@ -2336,7 +2312,6 @@ class Qwen2MoeModel(Model):
             experts = [k for d in self._experts for k in d.keys()]
             if len(experts) > 0:
                 raise ValueError(f"Unprocessed experts: {experts}")
-
 
 @Model.register("GPT2LMHeadModel")
 class GPT2Model(Model):
@@ -2373,7 +2348,6 @@ class GPT2Model(Model):
 
         return tensors
 
-
 @Model.register("PhiForCausalLM")
 class Phi2Model(Model):
     model_arch = gguf.MODEL_ARCH.PHI2
@@ -2397,7 +2371,6 @@ class Phi2Model(Model):
         self.gguf_writer.add_file_type(self.ftype)
         self.gguf_writer.add_add_bos_token(False)
 
-
 @Model.register("Phi3ForCausalLM")
 class Phi3MiniModel(Model):
     model_arch = gguf.MODEL_ARCH.PHI3
@@ -2406,7 +2379,7 @@ class Phi3MiniModel(Model):
         # Phi-4 model uses GPT2Tokenizer
         tokenizer_config_file = self.dir_model / 'tokenizer_config.json'
         if tokenizer_config_file.is_file():
-            with open(tokenizer_config_file, "r", encoding="utf-8") as f:
+            with open(tokenizer_config_file, "r", encoding = "utf-8") as f:
                 tokenizer_config_json = json.load(f)
                 tokenizer_class = tokenizer_config_json['tokenizer_class']
                 if tokenizer_class == 'GPT2Tokenizer':
@@ -2450,7 +2423,7 @@ class Phi3MiniModel(Model):
 
         added_tokens_file = self.dir_model / 'added_tokens.json'
         if added_tokens_file.is_file():
-            with open(added_tokens_file, "r", encoding="utf-8") as f:
+            with open(added_tokens_file, "r", encoding = "utf-8") as f:
                 added_tokens_json = json.load(f)
 
                 for key in added_tokens_json:
@@ -2465,7 +2438,7 @@ class Phi3MiniModel(Model):
 
         tokenizer_config_file = self.dir_model / 'tokenizer_config.json'
         if tokenizer_config_file.is_file():
-            with open(tokenizer_config_file, "r", encoding="utf-8") as f:
+            with open(tokenizer_config_file, "r", encoding = "utf-8") as f:
                 tokenizer_config_json = json.load(f)
                 added_tokens_decoder = tokenizer_config_json.get("added_tokens_decoder", {})
                 for token_id, foken_data in added_tokens_decoder.items():
@@ -2482,7 +2455,7 @@ class Phi3MiniModel(Model):
 
         tokenizer_file = self.dir_model / 'tokenizer.json'
         if tokenizer_file.is_file():
-            with open(tokenizer_file, "r", encoding="utf-8") as f:
+            with open(tokenizer_file, "r", encoding = "utf-8") as f:
                 tokenizer_json = json.load(f)
                 added_tokens = tokenizer_json.get("added_tokens", [])
                 for foken_data in added_tokens:
@@ -2503,7 +2476,7 @@ class Phi3MiniModel(Model):
         self.gguf_writer.add_token_scores(scores)
         self.gguf_writer.add_token_types(toktypes)
 
-        special_vocab = gguf.SpecialVocab(self.dir_model, n_vocab=len(tokens))
+        special_vocab = gguf.SpecialVocab(self.dir_model, n_vocab = len(tokens))
         special_vocab.add_to_gguf(self.gguf_writer)
 
     def set_gguf_parameters(self):
@@ -2572,9 +2545,8 @@ class Phi3MiniModel(Model):
         if len(long_factors) != len(short_factors) or len(long_factors) != rope_dims / 2:
             raise ValueError(f'The length of rope long and short factors must be {rope_dims / 2}. long_factors = {len(long_factors)}, short_factors = {len(short_factors)}.')
 
-        yield (self.format_tensor_name(gguf.MODEL_TENSOR.ROPE_FACTORS_LONG), torch.tensor(long_factors, dtype=torch.float32))
-        yield (self.format_tensor_name(gguf.MODEL_TENSOR.ROPE_FACTORS_SHORT), torch.tensor(short_factors, dtype=torch.float32))
-
+        yield (self.format_tensor_name(gguf.MODEL_TENSOR.ROPE_FACTORS_LONG), torch.tensor(long_factors, dtype = torch.float32))
+        yield (self.format_tensor_name(gguf.MODEL_TENSOR.ROPE_FACTORS_SHORT), torch.tensor(short_factors, dtype = torch.float32))
 
 @Model.register("PhiMoEForCausalLM")
 class PhiMoeModel(Phi3MiniModel):
@@ -2610,7 +2582,7 @@ class PhiMoeModel(Phi3MiniModel):
                         datas.append(self._experts[bid][ename])
                         del self._experts[bid][ename]
 
-                    data_torch = torch.stack(datas, dim=0)
+                    data_torch = torch.stack(datas, dim = 0)
 
                     merged_name = f"model.layers.{bid}.block_sparse_moe.experts.{w_name}.weight"
 
@@ -2631,7 +2603,6 @@ class PhiMoeModel(Phi3MiniModel):
             experts = [k for d in self._experts for k in d.keys()]
             if len(experts) > 0:
                 raise ValueError(f"Unprocessed experts: {experts}")
-
 
 @Model.register("PlamoForCausalLM")
 class PlamoModel(Model):
@@ -2680,7 +2651,6 @@ class PlamoModel(Model):
 
         return [(new_name, data_torch)]
 
-
 @Model.register("CodeShellForCausalLM")
 class CodeShellModel(Model):
     model_arch = gguf.MODEL_ARCH.CODESHELL
@@ -2715,7 +2685,6 @@ class CodeShellModel(Model):
                 tensors.append((self.format_tensor_name(gguf.MODEL_TENSOR.OUTPUT), data_torch))
 
         return tensors
-
 
 @Model.register("InternLM2ForCausalLM")
 class InternLM2Model(Model):
@@ -2777,7 +2746,7 @@ class InternLM2Model(Model):
 
         added_tokens_file = self.dir_model / 'added_tokens.json'
         if added_tokens_file.is_file():
-            with open(added_tokens_file, "r", encoding="utf-8") as f:
+            with open(added_tokens_file, "r", encoding = "utf-8") as f:
                 added_tokens_json = json.load(f)
 
                 for key in added_tokens_json:
@@ -2790,7 +2759,7 @@ class InternLM2Model(Model):
 
         tokenizer_config_file = self.dir_model / 'tokenizer_config.json'
         if tokenizer_config_file.is_file():
-            with open(tokenizer_config_file, "r", encoding="utf-8") as f:
+            with open(tokenizer_config_file, "r", encoding = "utf-8") as f:
                 tokenizer_config_json = json.load(f)
                 added_tokens_decoder = tokenizer_config_json.get("added_tokens_decoder", {})
                 for token_id, foken_data in added_tokens_decoder.items():
@@ -2810,7 +2779,7 @@ class InternLM2Model(Model):
 
         tokenizer_file = self.dir_model / 'tokenizer.json'
         if tokenizer_file.is_file():
-            with open(tokenizer_file, "r", encoding="utf-8") as f:
+            with open(tokenizer_file, "r", encoding = "utf-8") as f:
                 tokenizer_json = json.load(f)
                 added_tokens = tokenizer_json.get("added_tokens", [])
                 for foken_data in added_tokens:
@@ -2835,7 +2804,7 @@ class InternLM2Model(Model):
         self.gguf_writer.add_token_types(toktypes)
         self.gguf_writer.add_add_space_prefix(add_prefix)
 
-        special_vocab = gguf.SpecialVocab(self.dir_model, n_vocab=len(tokens))
+        special_vocab = gguf.SpecialVocab(self.dir_model, n_vocab = len(tokens))
         old_eos = special_vocab.special_token_ids["eos"]
         if chat_eos_token_id is not None:
             # For the chat model, we replace the eos with '<|im_end|>'.
@@ -2874,7 +2843,7 @@ class InternLM2Model(Model):
             qkv = data_torch
 
             qkv = qkv.reshape((num_groups, q_per_kv + 2, head_dim, n_embd))
-            q, k, v = qkv[:, : q_per_kv], qkv[:, -2], qkv[:, -1]
+            q, k, v = qkv[:,: q_per_kv], qkv[:, -2], qkv[:, -1]
 
             # The model weights of q and k equire additional reshape.
             q = LlamaModel.permute(q.reshape((-1, q.shape[-1])), num_heads, num_heads)
@@ -2889,7 +2858,6 @@ class InternLM2Model(Model):
         else:
             return [(self.map_tensor_name(name), data_torch)]
 
-
 @Model.register("InternLM3ForCausalLM")
 class InternLM3Model(Model):
     model_arch = gguf.MODEL_ARCH.LLAMA
@@ -2903,11 +2871,11 @@ class InternLM3Model(Model):
         self.gguf_writer.add_token_scores(scores)
         self.gguf_writer.add_token_types(toktypes)
 
-        special_vocab = gguf.SpecialVocab(self.dir_model, n_vocab=len(tokens))
+        special_vocab = gguf.SpecialVocab(self.dir_model, n_vocab = len(tokens))
 
         tokenizer_config_file = self.dir_model / 'tokenizer_config.json'
         if tokenizer_config_file.is_file():
-            with open(tokenizer_config_file, "r", encoding="utf-8") as f:
+            with open(tokenizer_config_file, "r", encoding = "utf-8") as f:
                 tokenizer_config_json = json.load(f)
                 if "add_prefix_space" in tokenizer_config_json:
                     self.gguf_writer.add_add_space_prefix(tokenizer_config_json["add_prefix_space"])
@@ -2949,7 +2917,6 @@ class InternLM3Model(Model):
             data_torch = LlamaModel.permute(data_torch, n_head, n_kv_head)
         return [(self.map_tensor_name(name), data_torch)]
 
-
 @Model.register("BertModel", "BertForMaskedLM", "CamembertModel")
 class BertModel(Model):
     model_arch = gguf.MODEL_ARCH.BERT
@@ -2966,7 +2933,7 @@ class BertModel(Model):
         pooling_path = None
         module_path = self.dir_model / "modules.json"
         if module_path.is_file():
-            with open(module_path, encoding="utf-8") as f:
+            with open(module_path, encoding = "utf-8") as f:
                 modules = json.load(f)
             for mod in modules:
                 if mod["type"] == "sentence_transformers.models.Pooling":
@@ -2975,7 +2942,7 @@ class BertModel(Model):
 
         # get pooling type
         if pooling_path is not None:
-            with open(self.dir_model / pooling_path / "config.json", encoding="utf-8") as f:
+            with open(self.dir_model / pooling_path / "config.json", encoding = "utf-8") as f:
                 pooling = json.load(f)
             if pooling["pooling_mode_mean_tokens"]:
                 pooling_type = gguf.PoolingType.MEAN
@@ -3001,6 +2968,7 @@ class BertModel(Model):
             if tok.startswith("##"):
                 return tok[2:]
             return "\u2581" + tok
+
         tokens = list(map(phantom, tokens))
 
         # add vocab to gguf
@@ -3010,7 +2978,7 @@ class BertModel(Model):
         self.gguf_writer.add_token_types(toktypes)
 
         # handle special tokens
-        special_vocab = gguf.SpecialVocab(self.dir_model, n_vocab=len(tokens))
+        special_vocab = gguf.SpecialVocab(self.dir_model, n_vocab = len(tokens))
         special_vocab.add_to_gguf(self.gguf_writer)
 
     def modify_tensors(self, data_torch: Tensor, name: str, bid: int | None) -> Iterable[tuple[str, Tensor]]:
@@ -3027,7 +2995,7 @@ class BertModel(Model):
 
         # we are only using BERT for embeddings so we don't need the pooling layer
         if name in ("embeddings.position_ids", "pooler.dense.weight", "pooler.dense.bias"):
-            return [] # we don't need these
+            return []  # we don't need these
 
         if name.startswith("cls.predictions"):
             return []
@@ -3036,7 +3004,6 @@ class BertModel(Model):
             return []
 
         return [(self.map_tensor_name(name), data_torch)]
-
 
 @Model.register("RobertaModel")
 class RobertaModel(BertModel):
@@ -3082,7 +3049,6 @@ class RobertaModel(BertModel):
 
         return super().modify_tensors(data_torch, name, bid)
 
-
 @Model.register("NomicBertModel")
 class NomicBertModel(BertModel):
     model_arch = gguf.MODEL_ARCH.NOMIC_BERT
@@ -3111,7 +3077,6 @@ class NomicBertModel(BertModel):
     def set_gguf_parameters(self):
         super().set_gguf_parameters()
         self.gguf_writer.add_rope_freq_base(self.hparams["rotary_emb_base"])
-
 
 @Model.register("XLMRobertaModel", "XLMRobertaForSequenceClassification")
 class XLMRobertaModel(BertModel):
@@ -3179,7 +3144,7 @@ class XLMRobertaModel(BertModel):
             pad_count = vocab_size - len(tokens)
             logger.debug(f"Padding vocab with {pad_count} token(s) - [PAD1] through [PAD{pad_count}]")
             for i in range(1, pad_count + 1):
-                tokens.append(bytes(f"[PAD{i}]", encoding="utf-8"))
+                tokens.append(bytes(f"[PAD{i}]", encoding = "utf-8"))
                 scores.append(-1000.0)
                 toktypes.append(SentencePieceTokenTypes.UNUSED)
 
@@ -3204,7 +3169,7 @@ class XLMRobertaModel(BertModel):
         if precompiled_charsmap:
             self.gguf_writer.add_precompiled_charsmap(precompiled_charsmap)
 
-        special_vocab = gguf.SpecialVocab(self.dir_model, n_vocab=len(tokens))
+        special_vocab = gguf.SpecialVocab(self.dir_model, n_vocab = len(tokens))
         special_vocab.add_to_gguf(self.gguf_writer)
 
         self.gguf_writer.add_add_bos_token(True)
@@ -3223,7 +3188,6 @@ class XLMRobertaModel(BertModel):
 
         return super().modify_tensors(data_torch, name, bid)
 
-
 @Model.register("GemmaForCausalLM")
 class GemmaModel(Model):
     model_arch = gguf.MODEL_ARCH.GEMMA
@@ -3232,13 +3196,13 @@ class GemmaModel(Model):
         self._set_vocab_sentencepiece()
 
         # TODO: these special tokens should be exported only for the CodeGemma family
-        special_vocab = gguf.SpecialVocab(self.dir_model, load_merges=False,
+        special_vocab = gguf.SpecialVocab(self.dir_model, load_merges = False,
                                           special_token_types = ['prefix', 'suffix', 'middle', 'fsep', 'eot'])
         special_vocab._set_special_token("prefix", 67)
         special_vocab._set_special_token("suffix", 69)
         special_vocab._set_special_token("middle", 68)
-        special_vocab._set_special_token("fsep",   70)
-        special_vocab._set_special_token("eot",    107)
+        special_vocab._set_special_token("fsep", 70)
+        special_vocab._set_special_token("eot", 107)
         special_vocab.chat_template = None  # do not add it twice
         special_vocab.add_to_gguf(self.gguf_writer)
 
@@ -3273,7 +3237,6 @@ class GemmaModel(Model):
             data_torch = data_torch + 1
 
         return [(self.map_tensor_name(name), data_torch)]
-
 
 @Model.register("Gemma2ForCausalLM")
 class Gemma2Model(Model):
@@ -3321,11 +3284,9 @@ class Gemma2Model(Model):
 
         return [(self.map_tensor_name(name), data_torch)]
 
-
 @Model.register("Starcoder2ForCausalLM")
 class StarCoder2Model(Model):
     model_arch = gguf.MODEL_ARCH.STARCODER2
-
 
 @Model.register("Rwkv6ForCausalLM")
 class Rwkv6Model(Model):
@@ -3338,7 +3299,7 @@ class Rwkv6Model(Model):
         tokens: list[bytes] = ['<s>'.encode("utf-8")]
         toktypes: list[int] = [gguf.TokenType.CONTROL]
 
-        with open(self.dir_model / "rwkv_vocab_v20230424.txt", "r", encoding="utf-8") as f:
+        with open(self.dir_model / "rwkv_vocab_v20230424.txt", "r", encoding = "utf-8") as f:
             lines = f.readlines()
             for line in lines:
                 parts = line.split(' ')
@@ -3359,7 +3320,7 @@ class Rwkv6Model(Model):
         self.gguf_writer.add_tokenizer_model("rwkv")
         self.gguf_writer.add_token_list(tokens)
         self.gguf_writer.add_token_types(toktypes)
-        special_vocab = gguf.SpecialVocab(self.dir_model, load_merges=False)
+        special_vocab = gguf.SpecialVocab(self.dir_model, load_merges = False)
         special_vocab.chat_template = "rwkv-world"
         # hack: Add '\n\n' as the EOT token to make it chat normally
         special_vocab._set_special_token("eot", 261)
@@ -3424,12 +3385,11 @@ class Rwkv6Model(Model):
                 self.lerp_weights[bid] = {new_name: data_torch}
             if all(f"blk.{bid}.time_mix_lerp_{i}.weight" in self.lerp_weights[bid].keys() for i in ["w", "k", "v", "r", "g"]):
                 new_name = f"blk.{bid}.time_mix_lerp_fused.weight"
-                data = torch.stack([self.lerp_weights[bid][f"blk.{bid}.time_mix_lerp_{i}.weight"].unsqueeze(0) for i in ["w", "k", "v", "r", "g"]], dim=0).unsqueeze(1)
+                data = torch.stack([self.lerp_weights[bid][f"blk.{bid}.time_mix_lerp_{i}.weight"].unsqueeze(0) for i in ["w", "k", "v", "r", "g"]], dim = 0).unsqueeze(1)
                 yield (new_name, data)
             return
 
         yield (new_name, data_torch)
-
 
 @Model.register("RWKV6Qwen2ForCausalLM")
 class RWKV6Qwen2Model(Rwkv6Model):
@@ -3477,13 +3437,12 @@ class RWKV6Qwen2Model(Rwkv6Model):
                 data = data.view(5, -1, data.shape[-1])
                 # rwkv6qwen2 has a different order of rkvwg instead of the original wkvrg
                 # permute them here to avoid code changes
-                data = torch.stack([data[3], data[1], data[2], data[0], data[4]], dim=0).view(-1, data.shape[-1])
+                data = torch.stack([data[3], data[1], data[2], data[0], data[4]], dim = 0).view(-1, data.shape[-1])
                 if "w2" in new_name:
                     data = data.view(5, -1, data.shape[-1])
                 yield (new_name, data)
                 continue
             yield (new_name, data)
-
 
 @Model.register("MambaForCausalLM", "MambaLMHeadModel", "FalconMambaForCausalLM")
 class MambaModel(Model):
@@ -3507,33 +3466,33 @@ class MambaModel(Model):
             self._set_vocab_builtin("gpt-neox", vocab_size)
 
     def set_gguf_parameters(self):
-        d_model = self.find_hparam(["hidden_size",       "d_model"])
-        d_conv  = self.find_hparam(["conv_kernel",       "d_conv"],  optional=True) or 4
-        d_inner = self.find_hparam(["intermediate_size", "d_inner"], optional=True) or 2 * d_model
-        d_state = self.find_hparam(["state_size",        "d_state"], optional=True) or 16
+        d_model = self.find_hparam(["hidden_size", "d_model"])
+        d_conv = self.find_hparam(["conv_kernel", "d_conv"], optional = True) or 4
+        d_inner = self.find_hparam(["intermediate_size", "d_inner"], optional = True) or 2 * d_model
+        d_state = self.find_hparam(["state_size", "d_state"], optional = True) or 16
         # ceiling division
         # ref: https://stackoverflow.com/a/17511341/22827863
         # ref: https://github.com/state-spaces/mamba/blob/ce59daea3a090d011d6476c6e5b97f6d58ddad8b/mamba_ssm/modules/mamba_simple.py#L58
-        dt_rank      = self.find_hparam(["time_step_rank",     "dt_rank"],      optional=True) or -(d_model // -16)
-        rms_norm_eps = self.find_hparam(["layer_norm_epsilon", "rms_norm_eps"], optional=True) or 1e-5
+        dt_rank = self.find_hparam(["time_step_rank", "dt_rank"], optional = True) or -(d_model // -16)
+        rms_norm_eps = self.find_hparam(["layer_norm_epsilon", "rms_norm_eps"], optional = True) or 1e-5
         use_dt_b_c_norm = False
         # For falconmamba we do apply RMS norm on B / DT and C layers
-        if self.find_hparam(["model_type"], optional=True) in ("falcon_mamba",):
+        if self.find_hparam(["model_type"], optional = True) in ("falcon_mamba",):
             use_dt_b_c_norm = True
         # Fail early for models which don't have a block expansion factor of 2
         assert d_inner == 2 * d_model
 
-        self.gguf_writer.add_context_length(2**20) # arbitrary value; for those who use the default
+        self.gguf_writer.add_context_length(2 ** 20)  # arbitrary value; for those who use the default
         self.gguf_writer.add_embedding_length(d_model)
-        self.gguf_writer.add_feed_forward_length(0) # unused, but seemingly required when loading
-        self.gguf_writer.add_head_count(0) # unused, but seemingly required when loading
+        self.gguf_writer.add_feed_forward_length(0)  # unused, but seemingly required when loading
+        self.gguf_writer.add_head_count(0)  # unused, but seemingly required when loading
         self.gguf_writer.add_block_count(self.block_count)
         self.gguf_writer.add_ssm_conv_kernel(d_conv)
         self.gguf_writer.add_ssm_inner_size(d_inner)
         self.gguf_writer.add_ssm_state_size(d_state)
         self.gguf_writer.add_ssm_time_step_rank(dt_rank)
         self.gguf_writer.add_layer_norm_rms_eps(rms_norm_eps)
-        self.gguf_writer.add_ssm_dt_b_c_rms(use_dt_b_c_norm) # For classic Mamba we don't apply rms norm on B / DT layers
+        self.gguf_writer.add_ssm_dt_b_c_rms(use_dt_b_c_norm)  # For classic Mamba we don't apply rms norm on B / DT layers
         self.gguf_writer.add_file_type(self.ftype)
 
     _tok_embd = None
@@ -3560,7 +3519,6 @@ class MambaModel(Model):
 
         return [(new_name, data_torch)]
 
-
 @Model.register("CohereForCausalLM")
 class CommandR2Model(Model):
     model_arch = gguf.MODEL_ARCH.COMMAND_R
@@ -3578,7 +3536,6 @@ class CommandR2Model(Model):
         self.gguf_writer.add_logit_scale(self.hparams["logit_scale"])
         self.gguf_writer.add_rope_scaling_type(gguf.RopeScalingType.NONE)
 
-
 @Model.register("Cohere2ForCausalLM")
 class Cohere2Model(Model):
     model_arch = gguf.MODEL_ARCH.COHERE2
@@ -3595,7 +3552,6 @@ class Cohere2Model(Model):
         num_attention_heads = self.hparams["num_attention_heads"]
         self.gguf_writer.add_rope_dimension_count(int(rotary_pct * (hidden_size // num_attention_heads)))
         self.gguf_writer.add_rope_scaling_type(gguf.RopeScalingType.NONE)
-
 
 @Model.register("OlmoForCausalLM")
 @Model.register("OLMoForCausalLM")
@@ -3624,11 +3580,9 @@ class OlmoModel(Model):
 
         return [(self.map_tensor_name(name), data_torch)]
 
-
 @Model.register("Olmo2ForCausalLM")
 class Olmo2Model(Model):
     model_arch = gguf.MODEL_ARCH.OLMO2
-
 
 @Model.register("OlmoeForCausalLM")
 class OlmoeModel(Model):
@@ -3666,7 +3620,7 @@ class OlmoeModel(Model):
                         datas.append(self._experts[bid][ename])
                         del self._experts[bid][ename]
 
-                    data_torch = torch.stack(datas, dim=0)
+                    data_torch = torch.stack(datas, dim = 0)
 
                     merged_name = f"model.layers.{bid}.mlp.experts.{w_name}.weight"
 
@@ -3689,7 +3643,6 @@ class OlmoeModel(Model):
             if len(experts) > 0:
                 raise ValueError(f"Unprocessed experts: {experts}")
 
-
 @Model.register("JinaBertModel", "JinaBertForMaskedLM")
 class JinaBertV2Model(BertModel):
     model_arch = gguf.MODEL_ARCH.JINA_BERT_V2
@@ -3701,10 +3654,10 @@ class JinaBertV2Model(BertModel):
     def get_tensors(self):
         for name, data in super().get_tensors():
             if 'gated_layer' in name:
-                d1 = data[:self.intermediate_size, :]
+                d1 = data[:self.intermediate_size,:]
                 name1 = name.replace('gated_layers', 'gated_layers_w')
                 name1 = name1.replace('up_gated_layer', 'gated_layers_v')
-                d2 = data[self.intermediate_size:, :]
+                d2 = data[self.intermediate_size:,:]
                 name2 = name.replace('gated_layers', 'gated_layers_v')
                 name2 = name2.replace('up_gated_layer', 'gated_layers_w')
                 yield name1, d1
@@ -3715,7 +3668,7 @@ class JinaBertV2Model(BertModel):
 
     def set_vocab(self):
         tokenizer_class = 'BertTokenizer'
-        with open(self.dir_model / "tokenizer_config.json", "r", encoding="utf-8") as f:
+        with open(self.dir_model / "tokenizer_config.json", "r", encoding = "utf-8") as f:
             tokenizer_class = json.load(f)['tokenizer_class']
 
         if tokenizer_class == 'BertTokenizer':
@@ -3735,7 +3688,6 @@ class JinaBertV2Model(BertModel):
             name = name[5:]
 
         return super().modify_tensors(data_torch, name, bid)
-
 
 @Model.register("OpenELMForCausalLM")
 class OpenELMModel(Model):
@@ -3811,7 +3763,6 @@ class OpenELMModel(Model):
 
         yield (self.map_tensor_name(name), data_torch)
 
-
 @Model.register("ArcticForCausalLM")
 class ArcticModel(Model):
     model_arch = gguf.MODEL_ARCH.ARCTIC
@@ -3862,7 +3813,7 @@ class ArcticModel(Model):
         # of information about added/redefined tokens and modify them accordingly.
         tokenizer_config_file = self.dir_model / 'tokenizer_config.json'
         if tokenizer_config_file.is_file():
-            with open(tokenizer_config_file, "r", encoding="utf-8") as f:
+            with open(tokenizer_config_file, "r", encoding = "utf-8") as f:
                 tokenizer_config_json = json.load(f)
 
                 if "added_tokens_decoder" in tokenizer_config_json:
@@ -3897,7 +3848,7 @@ class ArcticModel(Model):
         self.gguf_writer.add_token_scores(scores)
         self.gguf_writer.add_token_types(toktypes)
 
-        special_vocab = gguf.SpecialVocab(self.dir_model, n_vocab=len(tokens))
+        special_vocab = gguf.SpecialVocab(self.dir_model, n_vocab = len(tokens))
         special_vocab.add_to_gguf(self.gguf_writer)
 
     def set_gguf_parameters(self):
@@ -3940,7 +3891,7 @@ class ArcticModel(Model):
                         datas.append(self._experts[bid][ename])
                         del self._experts[bid][ename]
 
-                    data_torch = torch.stack(datas, dim=0)
+                    data_torch = torch.stack(datas, dim = 0)
 
                     merged_name = f"layers.{bid}.feed_forward.experts.{wid}.weight"
 
@@ -3961,7 +3912,6 @@ class ArcticModel(Model):
             experts = [k for d in self._experts for k in d.keys()]
             if len(experts) > 0:
                 raise ValueError(f"Unprocessed experts: {experts}")
-
 
 @Model.register("DeepseekForCausalLM")
 class DeepseekModel(Model):
@@ -4031,7 +3981,7 @@ class DeepseekModel(Model):
                         datas.append(self._experts[bid][ename])
                         del self._experts[bid][ename]
 
-                    data_torch = torch.stack(datas, dim=0)
+                    data_torch = torch.stack(datas, dim = 0)
 
                     merged_name = f"model.layers.{bid}.mlp.experts.{w_name}.weight"
 
@@ -4052,7 +4002,6 @@ class DeepseekModel(Model):
             experts = [k for d in self._experts for k in d.keys()]
             if len(experts) > 0:
                 raise ValueError(f"Unprocessed experts: {experts}")
-
 
 @Model.register("DeepseekV2ForCausalLM")
 @Model.register("DeepseekV3ForCausalLM")
@@ -4130,7 +4079,7 @@ class DeepseekV2Model(Model):
                         datas.append(self._experts[bid][ename])
                         del self._experts[bid][ename]
 
-                    data_torch = torch.stack(datas, dim=0)
+                    data_torch = torch.stack(datas, dim = 0)
 
                     merged_name = f"model.layers.{bid}.mlp.experts.{w_name}.weight"
 
@@ -4141,23 +4090,57 @@ class DeepseekV2Model(Model):
             else:
                 return []
 
-        # deepseek2-mla: split kv_b_proj into k_b_proj and v_b_proj
-        if name.endswith("kv_b_proj.weight"):
-            n_head_kv = self.hparams["num_key_value_heads"]
-            v_head_dim = self.hparams["v_head_dim"]
-            qk_nope_head_dim = self.hparams["qk_nope_head_dim"]
-            kv_lora_rank = self.hparams["kv_lora_rank"]
+        n_embed = self.hparams.get("hidden_size", self.hparams.get("n_embed"))
+        n_head_kv = self.hparams["num_key_value_heads"]
+        qk_nope_head_dim = self.hparams["qk_nope_head_dim"]
+        qk_rope_head_dim = self.hparams["qk_rope_head_dim"]
+        v_head_dim = self.hparams["v_head_dim"]
+        q_lora_rank = self.hparams["q_lora_rank"]
+        kv_lora_rank = self.hparams["kv_lora_rank"]        
 
+        # split q_b_proj into: q_b_proj and q_mqa_proj
+        if name.endswith("q_b_proj.weight"):
+            assert data_torch.shape[0] == n_head_kv * (qk_nope_head_dim + qk_rope_head_dim)
+            assert data_torch.shape[1] == q_lora_rank
+
+            q_b_proj_with_mqa = data_torch.view(n_head_kv, qk_nope_head_dim + qk_rope_head_dim, q_lora_rank)
+            q_b_proj, q_mqa_proj = torch.split(q_b_proj_with_mqa, [qk_nope_head_dim, qk_rope_head_dim], dim = 1)
+            
+            q_b_proj = q_b_proj.reshape(n_head_kv * qk_nope_head_dim, q_lora_rank)
+            q_mqa_proj = q_mqa_proj.reshape(n_head_kv * qk_rope_head_dim, q_lora_rank)
+
+            return [
+                ("q_b_proj", q_b_proj),
+                (self.map_tensor_name(name.replace("q_b_proj", "q_mqa_proj")), q_mqa_proj)
+            ]
+
+        # split kv_a_proj_with_mqa into: kv_a_proj and k_mqa_proj
+        if name.endswith("kv_a_proj_with_mqa.weight"):
+            assert data_torch.shape[0] == kv_lora_rank + qk_rope_head_dim
+            assert data_torch.shape[1] == n_embed
+
+            kv_a_proj_with_mqa = data_torch.view(kv_lora_rank + qk_rope_head_dim, n_embed)
+            kv_a_proj, k_mqa_proj = torch.split(kv_a_proj_with_mqa, [kv_lora_rank, qk_rope_head_dim], dim = 0)
+
+            return [
+                (self.map_tensor_name(name.replace("kv_a_proj_with_mqa", "kv_a_proj")), kv_a_proj),
+                (self.map_tensor_name(name.replace("kv_a_proj_with_mqa", "k_mqa_proj")), k_mqa_proj)
+            ]
+
+        # split kv_b_proj into: k_b_proj, v_b_proj, and k_b_trans_proj (for deepseek-mla)
+        if name.endswith("kv_b_proj.weight"):
             assert data_torch.shape[0] == n_head_kv * (v_head_dim + qk_nope_head_dim)
             assert data_torch.shape[1] == kv_lora_rank
 
-            kv_b_proj = data_torch.view(n_head_kv, v_head_dim + qk_nope_head_dim, kv_lora_rank)
-            k_b_proj, v_b_proj = torch.split(kv_b_proj, [qk_nope_head_dim, v_head_dim], dim=1)
-            k_b_proj = k_b_proj.transpose(1, 2)
-            k_b_proj = k_b_proj.reshape(n_head_kv, kv_lora_rank, qk_nope_head_dim)
-            v_b_proj = v_b_proj.reshape(n_head_kv, v_head_dim, kv_lora_rank)
+            kv_b_proj = data_torch.view(n_head_kv, v_head_dim + qk_nope_head_dim, kv_lora_rank)            
+            k_b_proj, v_b_proj = torch.split(kv_b_proj, [qk_nope_head_dim, v_head_dim], dim = 1)
+
+            k_b_trans_proj = k_b_proj.transpose(1, 2).reshape(n_head_kv * kv_lora_rank, qk_nope_head_dim)            
+            k_b_proj = k_b_proj.reshape(n_head_kv * qk_nope_head_dim, kv_lora_rank)
+            v_b_proj = v_b_proj.reshape(n_head_kv * v_head_dim, kv_lora_rank)
 
             return [
+                (self.map_tensor_name(name.replace("kv_b_proj", "k_b_trans_proj")), k_b_trans_proj),
                 (self.map_tensor_name(name.replace("kv_b_proj", "k_b_proj")), k_b_proj),
                 (self.map_tensor_name(name.replace("kv_b_proj", "v_b_proj")), v_b_proj)
             ]
@@ -4172,7 +4155,6 @@ class DeepseekV2Model(Model):
             experts = [k for d in self._experts for k in d.keys()]
             if len(experts) > 0:
                 raise ValueError(f"Unprocessed experts: {experts}")
-
 
 @Model.register("T5WithLMHeadModel")
 @Model.register("T5ForConditionalGeneration")
@@ -4246,7 +4228,7 @@ class T5Model(Model):
 
         added_tokens_file = self.dir_model / 'added_tokens.json'
         if added_tokens_file.is_file():
-            with open(added_tokens_file, "r", encoding="utf-8") as f:
+            with open(added_tokens_file, "r", encoding = "utf-8") as f:
                 added_tokens_json = json.load(f)
                 for key in added_tokens_json:
                     token_id = added_tokens_json[key]
@@ -4262,7 +4244,7 @@ class T5Model(Model):
             pad_count = vocab_size - len(tokens)
             logger.debug(f"Padding vocab with {pad_count} token(s) - [PAD1] through [PAD{pad_count}]")
             for i in range(1, pad_count + 1):
-                tokens.append(bytes(f"[PAD{i}]", encoding="utf-8"))
+                tokens.append(bytes(f"[PAD{i}]", encoding = "utf-8"))
                 scores.append(-1000.0)
                 toktypes.append(SentencePieceTokenTypes.UNUSED)
 
@@ -4276,14 +4258,14 @@ class T5Model(Model):
         if precompiled_charsmap:
             self.gguf_writer.add_precompiled_charsmap(precompiled_charsmap)
 
-        special_vocab = gguf.SpecialVocab(self.dir_model, n_vocab=len(tokens))
+        special_vocab = gguf.SpecialVocab(self.dir_model, n_vocab = len(tokens))
         special_vocab.add_to_gguf(self.gguf_writer)
 
         self.gguf_writer.add_add_bos_token(False)
         self.gguf_writer.add_add_eos_token(True)
 
     def set_gguf_parameters(self):
-        if (n_ctx := self.find_hparam(["n_positions"], optional=True)) is None:
+        if (n_ctx := self.find_hparam(["n_positions"], optional = True)) is None:
             logger.warning("Couldn't find context length in config.json, assuming default value of 512")
             n_ctx = 512
         self.gguf_writer.add_context_length(n_ctx)
@@ -4315,7 +4297,6 @@ class T5Model(Model):
                 return []
 
         return [(self.map_tensor_name(name), data_torch)]
-
 
 @Model.register("T5EncoderModel")
 class T5EncoderModel(Model):
@@ -4386,7 +4367,7 @@ class T5EncoderModel(Model):
 
         added_tokens_file = self.dir_model / 'added_tokens.json'
         if added_tokens_file.is_file():
-            with open(added_tokens_file, "r", encoding="utf-8") as f:
+            with open(added_tokens_file, "r", encoding = "utf-8") as f:
                 added_tokens_json = json.load(f)
                 for key in added_tokens_json:
                     token_id = added_tokens_json[key]
@@ -4402,7 +4383,7 @@ class T5EncoderModel(Model):
             pad_count = vocab_size - len(tokens)
             logger.debug(f"Padding vocab with {pad_count} token(s) - [PAD1] through [PAD{pad_count}]")
             for i in range(1, pad_count + 1):
-                tokens.append(bytes(f"[PAD{i}]", encoding="utf-8"))
+                tokens.append(bytes(f"[PAD{i}]", encoding = "utf-8"))
                 scores.append(-1000.0)
                 toktypes.append(SentencePieceTokenTypes.UNUSED)
 
@@ -4416,14 +4397,14 @@ class T5EncoderModel(Model):
         if precompiled_charsmap:
             self.gguf_writer.add_precompiled_charsmap(precompiled_charsmap)
 
-        special_vocab = gguf.SpecialVocab(self.dir_model, n_vocab=len(tokens))
+        special_vocab = gguf.SpecialVocab(self.dir_model, n_vocab = len(tokens))
         special_vocab.add_to_gguf(self.gguf_writer)
 
         self.gguf_writer.add_add_bos_token(False)
         self.gguf_writer.add_add_eos_token(True)
 
     def set_gguf_parameters(self):
-        if (n_ctx := self.find_hparam(["n_positions"], optional=True)) is None:
+        if (n_ctx := self.find_hparam(["n_positions"], optional = True)) is None:
             logger.warning("Couldn't find context length in config.json, assuming default value of 512")
             n_ctx = 512
         self.gguf_writer.add_context_length(n_ctx)
@@ -4454,7 +4435,6 @@ class T5EncoderModel(Model):
                 return []
 
         return [(self.map_tensor_name(name), data_torch)]
-
 
 @Model.register("JAISLMHeadModel")
 class JaisModel(Model):
@@ -4538,7 +4518,6 @@ class JaisModel(Model):
         super().prepare_tensors()
         self.gguf_writer.add_max_alibi_bias(self.max_alibi_bias)
 
-
 @Model.register("GlmForCausalLM", "ChatGLMModel", "ChatGLMForConditionalGeneration")
 class ChatGLMModel(Model):
     model_arch = gguf.MODEL_ARCH.CHATGLM
@@ -4551,7 +4530,7 @@ class ChatGLMModel(Model):
         scores: list[float] = []
 
         from transformers import AutoTokenizer
-        tokenizer = AutoTokenizer.from_pretrained(dir_model, trust_remote_code=True)
+        tokenizer = AutoTokenizer.from_pretrained(dir_model, trust_remote_code = True)
         vocab_size = hparams.get("padded_vocab_size", len(tokenizer.get_vocab()))
         assert max(tokenizer.get_vocab().values()) < vocab_size
         role_special_tokens = ["<|system|>", "<|user|>", "<|assistant|>", "<|observation|>"]
@@ -4607,7 +4586,7 @@ class ChatGLMModel(Model):
         self.gguf_writer.add_token_scores(scores)
         self.gguf_writer.add_token_types(toktypes)
 
-        special_vocab = gguf.SpecialVocab(self.dir_model, n_vocab=len(tokens))
+        special_vocab = gguf.SpecialVocab(self.dir_model, n_vocab = len(tokens))
         special_vocab.add_to_gguf(self.gguf_writer)
 
     @staticmethod
@@ -4644,8 +4623,8 @@ class ChatGLMModel(Model):
         toktypes: list[int] = []
 
         from transformers import AutoTokenizer
-        tokenizer = AutoTokenizer.from_pretrained(dir_model, trust_remote_code=True)
-        vocab_size = hparams.get("padded_vocab_size",hparams["vocab_size"])
+        tokenizer = AutoTokenizer.from_pretrained(dir_model, trust_remote_code = True)
+        vocab_size = hparams.get("padded_vocab_size", hparams["vocab_size"])
         assert max(tokenizer.get_vocab().values()) < vocab_size
 
         tokens, toktypes, tokpre = self.get_vocab_base()
@@ -4653,7 +4632,7 @@ class ChatGLMModel(Model):
         self.gguf_writer.add_tokenizer_pre(tokpre)
         self.gguf_writer.add_token_list(tokens)
         self.gguf_writer.add_token_types(toktypes)
-        special_vocab = gguf.SpecialVocab(self.dir_model, load_merges=True)
+        special_vocab = gguf.SpecialVocab(self.dir_model, load_merges = True)
         # only add special tokens when they were not already loaded from config.json
         special_vocab._set_special_token("eos", tokenizer.get_added_vocab()["<|endoftext|>"])
         special_vocab._set_special_token("eot", tokenizer.get_added_vocab()["<|user|>"])
@@ -4671,7 +4650,7 @@ class ChatGLMModel(Model):
         self.gguf_writer.add_block_count(self.hparams.get("num_layers", self.hparams["num_hidden_layers"]))
         self.gguf_writer.add_head_count(n_head)
         self.gguf_writer.add_head_count_kv(n_head_kv)
-        self.gguf_writer.add_layer_norm_rms_eps(self.hparams.get("layernorm_epsilon",1e-5))
+        self.gguf_writer.add_layer_norm_rms_eps(self.hparams.get("layernorm_epsilon", 1e-5))
         self.gguf_writer.add_file_type(self.ftype)
         if "attention_dim" in self.hparams:
             rope_dim = self.hparams["attention_dim"]
@@ -4692,7 +4671,6 @@ class ChatGLMModel(Model):
 
         name = name.removeprefix("transformer.")
         return [(self.map_tensor_name(name), data_torch)]
-
 
 @Model.register("NemotronForCausalLM")
 class NemotronModel(Model):
@@ -4734,7 +4712,6 @@ class NemotronModel(Model):
 
         return [(self.map_tensor_name(name), data_torch)]
 
-
 @Model.register("ExaoneForCausalLM")
 class ExaoneModel(Model):
     model_arch = gguf.MODEL_ARCH.EXAONE
@@ -4766,7 +4743,7 @@ class ExaoneModel(Model):
 
         if (rope_theta := self.hparams.get("rope_theta")) is not None:
             self.gguf_writer.add_rope_freq_base(rope_theta)
-        rotary_factor = self.find_hparam(["partial_rotary_factor", "rope_pct"], optional=True)
+        rotary_factor = self.find_hparam(["partial_rotary_factor", "rope_pct"], optional = True)
         rotary_factor = rotary_factor if rotary_factor is not None else 1.0
         self.gguf_writer.add_rope_dimension_count(int(rotary_factor * (hparams["hidden_size"] // hparams["num_attention_heads"])))
         if hparams.get("rope_scaling") is not None and "factor" in hparams["rope_scaling"]:
@@ -4775,11 +4752,11 @@ class ExaoneModel(Model):
                 self.gguf_writer.add_rope_scaling_factor(hparams["rope_scaling"]["factor"])
 
     def generate_extra_tensors(self) -> Iterable[tuple[str, Tensor]]:
-        if rope_scaling := self.find_hparam(["rope_scaling"], optional=True):
+        if rope_scaling := self.find_hparam(["rope_scaling"], optional = True):
             if rope_scaling.get("rope_type", '').lower() == "llama3":
                 base = self.hparams.get("rope_theta", 10000.0)
                 dim = self.hparams.get("head_dim", self.hparams["hidden_size"] // self.hparams["num_attention_heads"])
-                freqs = 1.0 / (base ** (torch.arange(0, dim, 2, dtype=torch.float32) / dim))
+                freqs = 1.0 / (base ** (torch.arange(0, dim, 2, dtype = torch.float32) / dim))
 
                 factor = rope_scaling.get("factor", 8.0)
                 low_freq_factor = rope_scaling.get("low_freq_factor", 1.0)
@@ -4801,8 +4778,7 @@ class ExaoneModel(Model):
                         smooth = (old_context_len / wavelen - low_freq_factor) / (high_freq_factor - low_freq_factor)
                         rope_factors.append(1 / ((1 - smooth) / factor + smooth))
 
-                yield (self.format_tensor_name(gguf.MODEL_TENSOR.ROPE_FREQS), torch.tensor(rope_factors, dtype=torch.float32))
-
+                yield (self.format_tensor_name(gguf.MODEL_TENSOR.ROPE_FREQS), torch.tensor(rope_factors, dtype = torch.float32))
 
 @Model.register("GraniteForCausalLM")
 class GraniteModel(LlamaModel):
@@ -4837,7 +4813,6 @@ class GraniteModel(LlamaModel):
             self.gguf_writer.add_logit_scale(logits_scale)
             logger.info("gguf: (granite) logits_scale = %s", logits_scale)
 
-
 @Model.register("GraniteMoeForCausalLM")
 class GraniteMoeModel(GraniteModel):
     """Conversion for IBM's GraniteMoeForCausalLM"""
@@ -4853,14 +4828,13 @@ class GraniteMoeModel(GraniteModel):
         if name.endswith("block_sparse_moe.input_linear.weight"):
             ffn_dim = self.hparams["intermediate_size"]
             assert data_torch.shape[-2] == 2 * ffn_dim, "Merged FFN tensor size must be 2 * intermediate_size"
-            gate, up = data_torch[..., :ffn_dim, :], data_torch[..., ffn_dim:, :]
+            gate, up = data_torch[...,:ffn_dim,:], data_torch[..., ffn_dim:,:]
             return [
                 (self.format_tensor_name(gguf.MODEL_TENSOR.FFN_GATE_EXP, bid), gate),
                 (self.format_tensor_name(gguf.MODEL_TENSOR.FFN_UP_EXP, bid), up),
             ]
 
         return super().modify_tensors(data_torch, name, bid)
-
 
 @Model.register("ChameleonForConditionalGeneration")
 @Model.register("ChameleonForCausalLM")  # obsolete
@@ -4903,9 +4877,7 @@ class ChameleonModel(Model):
         data_torch = data_torch.repeat_interleave(n_heads, 0)
         return data_torch
 
-
 ###### CONVERSION LOGIC ######
-
 
 # tree of lazy tensors
 class LazyTorchTensor(gguf.LazyBase):
@@ -4944,24 +4916,24 @@ class LazyTorchTensor(gguf.LazyBase):
     def numpy(self) -> gguf.LazyNumpyTensor:
         dtype = self._dtype_map[self.dtype]
         return gguf.LazyNumpyTensor(
-            meta=gguf.LazyNumpyTensor.meta_with_dtype_and_shape(dtype, self.shape),
-            args=(self,),
-            func=(lambda s: s.numpy())
+            meta = gguf.LazyNumpyTensor.meta_with_dtype_and_shape(dtype, self.shape),
+            args = (self,),
+            func = (lambda s: s.numpy())
         )
 
     @classmethod
     def meta_with_dtype_and_shape(cls, dtype: torch.dtype, shape: tuple[int, ...]) -> Tensor:
-        return torch.empty(size=shape, dtype=dtype, device="meta")
+        return torch.empty(size = shape, dtype = dtype, device = "meta")
 
     @classmethod
     def from_safetensors_slice(cls, st_slice: Any) -> Tensor:
         dtype = cls._dtype_str_map[st_slice.get_dtype()]
         shape: tuple[int, ...] = tuple(st_slice.get_shape())
-        lazy = cls(meta=cls.meta_with_dtype_and_shape(dtype, shape), args=(st_slice,), func=lambda s: s[:])
+        lazy = cls(meta = cls.meta_with_dtype_and_shape(dtype, shape), args = (st_slice,), func = lambda s: s[:])
         return cast(torch.Tensor, lazy)
 
     @classmethod
-    def __torch_function__(cls, func, types, args=(), kwargs=None):
+    def __torch_function__(cls, func, types, args = (), kwargs = None):
         del types  # unused
 
         if kwargs is None:
@@ -4972,77 +4944,75 @@ class LazyTorchTensor(gguf.LazyBase):
 
         return cls._wrap_fn(func)(*args, **kwargs)
 
-
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Convert a huggingface model to a GGML compatible file")
+        description = "Convert a huggingface model to a GGML compatible file")
     parser.add_argument(
-        "--vocab-only", action="store_true",
-        help="extract only the vocab",
+        "--vocab-only", action = "store_true",
+        help = "extract only the vocab",
     )
     parser.add_argument(
-        "--outfile", type=Path,
-        help="path to write to; default: based on input. {ftype} will be replaced by the outtype.",
+        "--outfile", type = Path,
+        help = "path to write to; default: based on input. {ftype} will be replaced by the outtype.",
     )
     parser.add_argument(
-        "--outtype", type=str, choices=["f32", "f16", "bf16", "q8_0", "tq1_0", "tq2_0", "auto"], default="f16",
-        help="output format - use f32 for float32, f16 for float16, bf16 for bfloat16, q8_0 for Q8_0, tq1_0 or tq2_0 for ternary, and auto for the highest-fidelity 16-bit float type depending on the first loaded tensor type",
+        "--outtype", type = str, choices = ["f32", "f16", "bf16", "q8_0", "tq1_0", "tq2_0", "auto"], default = "f16",
+        help = "output format - use f32 for float32, f16 for float16, bf16 for bfloat16, q8_0 for Q8_0, tq1_0 or tq2_0 for ternary, and auto for the highest-fidelity 16-bit float type depending on the first loaded tensor type",
     )
     parser.add_argument(
-        "--bigendian", action="store_true",
-        help="model is executed on big endian machine",
+        "--bigendian", action = "store_true",
+        help = "model is executed on big endian machine",
     )
     parser.add_argument(
-        "model", type=Path,
-        help="directory containing model file",
-        nargs="?",
+        "model", type = Path,
+        help = "directory containing model file",
+        nargs = "?",
     )
     parser.add_argument(
-        "--use-temp-file", action="store_true",
-        help="use the tempfile library while processing (helpful when running out of memory, process killed)",
+        "--use-temp-file", action = "store_true",
+        help = "use the tempfile library while processing (helpful when running out of memory, process killed)",
     )
     parser.add_argument(
-        "--no-lazy", action="store_true",
-        help="use more RAM by computing all outputs before writing (use in case lazy evaluation is broken)",
+        "--no-lazy", action = "store_true",
+        help = "use more RAM by computing all outputs before writing (use in case lazy evaluation is broken)",
     )
     parser.add_argument(
-        "--model-name", type=str, default=None,
-        help="name of the model",
+        "--model-name", type = str, default = None,
+        help = "name of the model",
     )
     parser.add_argument(
-        "--verbose", action="store_true",
-        help="increase output verbosity",
+        "--verbose", action = "store_true",
+        help = "increase output verbosity",
     )
     parser.add_argument(
-        "--split-max-tensors", type=int, default=0,
-        help="max tensors in each split",
+        "--split-max-tensors", type = int, default = 0,
+        help = "max tensors in each split",
     )
     parser.add_argument(
-        "--split-max-size", type=str, default="0",
-        help="max size per split N(M|G)",
+        "--split-max-size", type = str, default = "0",
+        help = "max size per split N(M|G)",
     )
     parser.add_argument(
-        "--dry-run", action="store_true",
-        help="only print out a split plan and exit, without writing any new files",
+        "--dry-run", action = "store_true",
+        help = "only print out a split plan and exit, without writing any new files",
     )
     parser.add_argument(
-        "--no-tensor-first-split", action="store_true",
-        help="do not add tensors to the first split (disabled by default)"
+        "--no-tensor-first-split", action = "store_true",
+        help = "do not add tensors to the first split (disabled by default)"
     )
     parser.add_argument(
-        "--metadata", type=Path,
-        help="Specify the path for an authorship metadata override file"
+        "--metadata", type = Path,
+        help = "Specify the path for an authorship metadata override file"
     )
     parser.add_argument(
-        "--print-supported-models", action="store_true",
-        help="Print the supported models"
+        "--print-supported-models", action = "store_true",
+        help = "Print the supported models"
     )
 
     args = parser.parse_args()
     if not args.print_supported_models and args.model is None:
         parser.error("the following arguments are required: model")
     return args
-
 
 def split_str_to_n_bytes(split_str: str) -> int:
     if split_str.endswith("K"):
@@ -5061,7 +5031,6 @@ def split_str_to_n_bytes(split_str: str) -> int:
 
     return n
 
-
 def main() -> None:
     args = parse_args()
 
@@ -5071,9 +5040,9 @@ def main() -> None:
         sys.exit(0)
 
     if args.verbose:
-        logging.basicConfig(level=logging.DEBUG)
+        logging.basicConfig(level = logging.DEBUG)
     else:
-        logging.basicConfig(level=logging.INFO)
+        logging.basicConfig(level = logging.INFO)
 
     dir_model = args.model
 
@@ -5115,13 +5084,13 @@ def main() -> None:
             logger.error(f"Model {model_architecture} is not supported")
             sys.exit(1)
 
-        model_instance = model_class(dir_model=dir_model, ftype=output_type, fname_out=fname_out,
-                                     is_big_endian=args.bigendian, use_temp_file=args.use_temp_file,
-                                     eager=args.no_lazy,
-                                     metadata_override=args.metadata, model_name=args.model_name,
-                                     split_max_tensors=args.split_max_tensors,
-                                     split_max_size=split_str_to_n_bytes(args.split_max_size), dry_run=args.dry_run,
-                                     small_first_shard=args.no_tensor_first_split)
+        model_instance = model_class(dir_model = dir_model, ftype = output_type, fname_out = fname_out,
+                                     is_big_endian = args.bigendian, use_temp_file = args.use_temp_file,
+                                     eager = args.no_lazy,
+                                     metadata_override = args.metadata, model_name = args.model_name,
+                                     split_max_tensors = args.split_max_tensors,
+                                     split_max_size = split_str_to_n_bytes(args.split_max_size), dry_run = args.dry_run,
+                                     small_first_shard = args.no_tensor_first_split)
 
         if args.vocab_only:
             logger.info("Exporting model vocab...")
@@ -5132,7 +5101,6 @@ def main() -> None:
             model_instance.write()
             out_path = f"{model_instance.fname_out.parent}{os.sep}" if is_split else model_instance.fname_out
             logger.info(f"Model successfully exported to {out_path}")
-
 
 if __name__ == '__main__':
     main()
