@@ -599,7 +599,7 @@ class TensorNameMap:
         ),
 
         MODEL_TENSOR.ATTN_K_B_TRANS: (
-            "model.layers.{bid}.self_attn.kk_b_trans_proj",  # deepseek2 (mla only)
+            "model.layers.{bid}.self_attn.k_b_trans_proj",  # deepseek2 (mla only)
         ),
 
         MODEL_TENSOR.ATTN_K_B: (
