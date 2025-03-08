@@ -4095,23 +4095,40 @@ class DeepseekV2Model(Model):
         qk_nope_head_dim = self.hparams["qk_nope_head_dim"]
         qk_rope_head_dim = self.hparams["qk_rope_head_dim"]
         v_head_dim = self.hparams["v_head_dim"]
-        q_lora_rank = self.hparams["q_lora_rank"]
         kv_lora_rank = self.hparams["kv_lora_rank"]        
 
-        # split q_b_proj into: q_b_proj and q_mqa_proj
+        # (v2-lite) split q_proj into: q_proj and q_mqa_proj
+        if name.endswith("q_proj.weight"):
+            assert data_torch.shape[0] == n_head_kv * (qk_nope_head_dim + qk_rope_head_dim)
+            assert data_torch.shape[1] == n_embed
+
+            q_proj_with_mqa = data_torch.view(n_head_kv, qk_nope_head_dim + qk_rope_head_dim, n_embed)
+            q_proj, q_mqa_proj = torch.split(q_proj_with_mqa, [qk_nope_head_dim, qk_rope_head_dim], dim = 1)
+            
+            q_proj = q_proj.reshape(n_head_kv * qk_nope_head_dim, n_embed)
+            q_mqa_proj = q_mqa_proj.reshape(n_head_kv * qk_rope_head_dim, n_embed)
+
+            return [
+                (self.map_tensor_name(name), q_proj),
+                (self.map_tensor_name(name.replace("q_proj", "q_mqa_proj")), q_mqa_proj)
+            ]
+
+        # (v2/v3/r1) split q_b_proj into: q_b_proj and q_b_mqa_proj
         if name.endswith("q_b_proj.weight"):
+            q_lora_rank = self.hparams["q_lora_rank"]
+            
             assert data_torch.shape[0] == n_head_kv * (qk_nope_head_dim + qk_rope_head_dim)
             assert data_torch.shape[1] == q_lora_rank
 
             q_b_proj_with_mqa = data_torch.view(n_head_kv, qk_nope_head_dim + qk_rope_head_dim, q_lora_rank)
-            q_b_proj, q_mqa_proj = torch.split(q_b_proj_with_mqa, [qk_nope_head_dim, qk_rope_head_dim], dim = 1)
+            q_b_proj, q_b_mqa_proj = torch.split(q_b_proj_with_mqa, [qk_nope_head_dim, qk_rope_head_dim], dim = 1)
             
             q_b_proj = q_b_proj.reshape(n_head_kv * qk_nope_head_dim, q_lora_rank)
-            q_mqa_proj = q_mqa_proj.reshape(n_head_kv * qk_rope_head_dim, q_lora_rank)
+            q_b_mqa_proj = q_b_mqa_proj.reshape(n_head_kv * qk_rope_head_dim, q_lora_rank)
 
             return [
                 (self.map_tensor_name(name), q_b_proj),
-                (self.map_tensor_name(name.replace("q_b_proj", "q_mqa_proj")), q_mqa_proj)
+                (self.map_tensor_name(name.replace("q_b_proj", "q_b_mqa_proj")), q_b_mqa_proj)
             ]
 
         # split kv_a_proj_with_mqa into: kv_a_proj and k_mqa_proj

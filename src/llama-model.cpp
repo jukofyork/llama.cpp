@@ -2891,9 +2891,10 @@ bool llama_model::load_tensors(llama_model_loader & ml) {
                         if (!is_lite) {
                             layer.wq_a = create_tensor(tn(LLM_TENSOR_ATTN_Q_A, "weight", i), {n_embd, q_lora_rank}, 0);
                             layer.wq_b = create_tensor(tn(LLM_TENSOR_ATTN_Q_B, "weight", i), {q_lora_rank, n_head * n_embd_head_qk_nope}, 0);
-                            layer.wq_mqa = create_tensor(tn(LLM_TENSOR_ATTN_Q_MQA, "weight", i), {q_lora_rank, n_head * n_embd_head_qk_rope}, 0);
+                            layer.wq_b_mqa = create_tensor(tn(LLM_TENSOR_ATTN_Q_B_MQA, "weight", i), {q_lora_rank, n_head * n_embd_head_qk_rope}, 0);
                         } else {
-                            layer.wq = create_tensor(tn(LLM_TENSOR_ATTN_Q, "weight", i), {n_embd, n_embd_k_gqa}, 0);
+                            layer.wq = create_tensor(tn(LLM_TENSOR_ATTN_Q, "weight", i), {n_embd, n_head * n_embd_head_qk_nope}, 0);
+                            layer.wq_mqa = create_tensor(tn(LLM_TENSOR_ATTN_Q_MQA, "weight", i), {n_embd, n_head * n_embd_head_qk_rope}, 0);
                         }
 
                         layer.wkv_a = create_tensor(tn(LLM_TENSOR_ATTN_KV_A, "weight", i), {n_embd, kv_lora_rank}, 0);

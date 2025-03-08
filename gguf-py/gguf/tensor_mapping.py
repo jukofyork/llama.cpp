@@ -587,7 +587,11 @@ class TensorNameMap:
         ),
 
         MODEL_TENSOR.ATTN_Q_MQA: (
-            "model.layers.{bid}.self_attn.q_mqa_proj",  # deepseek2
+            "model.layers.{bid}.self_attn.q_mqa_proj",  # deepseek2 (v2-lite)
+        ),
+
+        MODEL_TENSOR.ATTN_Q_B_MQA: (
+            "model.layers.{bid}.self_attn.q_b_mqa_proj",  # deepseek2 (v2/v3/r1)
         ),
 
         MODEL_TENSOR.ATTN_KV_A: (
