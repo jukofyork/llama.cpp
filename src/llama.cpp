@@ -6536,9 +6536,9 @@ struct llm_build_context {
                     struct ggml_tensor * q_nope_absorbed = ggml_mul_mat(ctx0, wk_b_view, q_nope_view);
                     cb(q_nope_absorbed, "q_nope_absorbed", il);
 
-                    // {kv_lora_rank, n_head, n_tokens}
+                    // {n_embd_head_qk_rope, n_tokens, n_head}
                     q_nope_absorbed = ggml_permute(ctx0, q_nope_absorbed, 0, 2, 1, 3);
-                    cb(q_nope_absorbed, "q_nope_absorbed_perm", il);
+                    cb(q_nope_absorbed, "q_mqa_view_perm", il);
 
                     // {kv_lora_rank + n_embd_head_qk_rope, n_tokens, n_head}
                     struct ggml_tensor * q_compressed = ggml_concat(ctx0, q_nope_absorbed, q_mqa_view, 0);
@@ -6575,7 +6575,7 @@ struct llm_build_context {
 							ggml_row_size(kv_self.v_l[il]->type, kv_head));
                     cb(v_cache_trans_slots_view, "v_cache_trans_slots_view", il);
 
-                    ggml_build_forward_expand(gf, ggml_cpy(ctx0, k_compressed, k_cache_slots_view));
+                    ggml_build_forward_expand(gf, ggml_cpy(ctx0, k_compressed_view, k_cache_slots_view));
                     ggml_build_forward_expand(gf, ggml_cpy(ctx0, v_compressed_trans, v_cache_trans_slots_view));
 
                     // {kv_lora_rank + n_embd_head_qk_rope, n_kv}
@@ -6596,13 +6596,11 @@ struct llm_build_context {
                     cb(kq, "kq", il);
 
                     // {n_kv, n_tokens, n_head}
-                    struct ggml_tensor * kq_view = ggml_view_3d(ctx0, kq, n_kv, n_head, n_tokens,
+                    struct ggml_tensor * kq_view = ggml_view_3d(ctx0, kq, n_kv, n_tokens, n_head,
                     		ggml_row_size(kq->type, n_kv),
-							ggml_row_size(kq->type, n_kv * n_head),
+							ggml_row_size(kq->type, n_kv * n_tokens),
 							0);
                     cb(kq_view, "kq_view", il);
-
-                    kq_view = ggml_cont(ctx0, ggml_permute(ctx0, kq_view, 0, 2, 1, 3));
 
                     struct ggml_tensor * kq_soft_max = ggml_soft_max_ext(ctx0, kq_view, KQ_mask, kq_scale, hparams.f_max_alibi_bias);
                     cb(kq_soft_max, "kq_soft_max", il);
