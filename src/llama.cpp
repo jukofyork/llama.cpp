@@ -6540,22 +6540,22 @@ struct llm_build_context {
                     print_tensor_debug_info(wk_b_view);
 
                 	// {n_embd_head_qk_nope, n_tokens, n_head}
-                	q_nope_view = ggml_permute(ctx0, q_nope_view, 0, 2, 1, 3);
-                    cb(q_nope_view, "q_nope_view_perm", il);
-                    print_tensor_debug_info(q_nope_view);
+                    struct ggml_tensor * q_nope_view_perm = ggml_cont(ctx0, ggml_permute(ctx0, q_nope_view, 0, 2, 1, 3));
+                    cb(q_nope_view_perm, "q_nope_view_perm", il);
+                    print_tensor_debug_info(q_nope_view_perm);
 
                     // {n_embd_head_qk_nope, kv_lora_rank, n_head} * {n_embd_head_qk_nope, n_tokens, n_head} = {kv_lora_rank, n_tokens, n_head}
-                    struct ggml_tensor * q_nope_absorbed = ggml_mul_mat(ctx0, wk_b_view, q_nope_view);
+                    struct ggml_tensor * q_nope_absorbed = ggml_mul_mat(ctx0, wk_b_view, q_nope_view_perm);
                     cb(q_nope_absorbed, "q_nope_absorbed", il);
                     print_tensor_debug_info(q_nope_absorbed);
 
                     // {n_embd_head_qk_rope, n_tokens, n_head}
-                    q_mqa_view = ggml_permute(ctx0, q_mqa_view, 0, 2, 1, 3);
-                    cb(q_mqa_view, "q_mqa_view_perm", il);
-                    print_tensor_debug_info(q_mqa_view);
+                    struct ggml_tensor * q_mqa_view_perm = ggml_cont(ctx0, ggml_permute(ctx0, q_mqa_view, 0, 2, 1, 3));
+                    cb(q_mqa_view_perm, "q_mqa_view_perm", il);
+                    print_tensor_debug_info(q_mqa_view_perm);
 
                     // {kv_lora_rank + n_embd_head_qk_rope, n_tokens, n_head}
-                    struct ggml_tensor * q_compressed = ggml_concat(ctx0, q_nope_absorbed, q_mqa_view, 0);
+                    struct ggml_tensor * q_compressed = ggml_concat(ctx0, q_nope_absorbed, q_mqa_view_perm, 0);
                     cb(q_compressed, "q_compressed", il);
                     print_tensor_debug_info(q_compressed);
 
@@ -6587,7 +6587,7 @@ struct llm_build_context {
     				print_tensor_debug_info(k_compressed_view);
 
                     // {n_tokens, kv_lora_rank}
-                    struct ggml_tensor * v_compressed_trans = ggml_transpose(ctx0, kv_compressed);
+                    struct ggml_tensor * v_compressed_trans = ggml_cont(ctx0, ggml_transpose(ctx0, kv_compressed));
                     cb(v_compressed_trans, "v_compressed_trans", il);
                     print_tensor_debug_info(v_compressed_trans);
 
