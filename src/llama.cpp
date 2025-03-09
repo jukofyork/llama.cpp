@@ -6414,33 +6414,47 @@ struct llm_build_context {
 
             // self_attention
             {
+            	auto print_tensor_debug_info = [](const struct ggml_tensor* tensor) {
+            	    printf("tensor: %8d %8d %8d %8d\n", tensor->ne[0], tensor->ne[1], tensor->ne[2], tensor->ne[3]);
+            	    printf("       %8d %8d %8d %8d\n", tensor->nb[0], tensor->nb[1], tensor->nb[2], tensor->nb[3]);
+            	    printf("tensor is contiguous %d, transposed %d, type = %s, name = %s\n",
+            	           ggml_is_contiguous(tensor), ggml_is_transposed(tensor),
+            	           ggml_type_name(tensor->type), tensor->name);
+            	};
+
             	struct ggml_tensor * q_nope;
             	struct ggml_tensor * q_mqa;
                 if (!is_lite) {
                     // {n_embd, q_lora_rank} * {n_embd, n_tokens} -> {q_lora_rank, n_tokens}
                 	struct ggml_tensor * q_compressed = ggml_mul_mat(ctx0, model.layers[il].wq_a, cur);
+                	print_tensor_debug_info(q_compressed);
                     cb(q_compressed, "q_compressed", il);
 
                     q_compressed = llm_build_norm(ctx0, q_compressed, hparams,
                             model.layers[il].attn_q_a_norm, NULL,
                             LLM_NORM_RMS, cb, il);
                     cb(q_compressed, "q_compressed_norm", il);
+                    print_tensor_debug_info(q_compressed);
 
                     // {q_lora_rank, n_head * n_embd_head_qk_nope} * {q_lora_rank, n_tokens} -> {n_head * n_embd_head_qk_nope, n_tokens}
                     q_nope = ggml_mul_mat(ctx0, model.layers[il].wq_b, q_compressed);
                     cb(q_nope, "q_nope", il);
+                    print_tensor_debug_info(q_nope);
 
                     // {q_lora_rank, n_head * n_embd_head_qk_rope} * {q_lora_rank, n_tokens} -> {n_head * n_embd_head_qk_rope, n_tokens}
                     q_mqa = ggml_mul_mat(ctx0, model.layers[il].wq_b_mqa, q_compressed);
                     cb(q_mqa, "q_mqa", il);
+                    print_tensor_debug_info(q_mqa);
                 } else {
                     // {n_embd, n_head * n_embd_head_qk_nope} * {n_embd, n_tokens} -> {n_head * n_embd_head_qk_nope, n_tokens}
                     q_nope = ggml_mul_mat(ctx0, model.layers[il].wq, cur);
                     cb(q_nope, "q_nope", il);
+                    print_tensor_debug_info(q_nope);
 
                     // {n_embd, n_head * n_embd_head_qk_rope} * {n_embd, n_tokens} -> {n_head * n_embd_head_qk_rope, n_tokens}
                     q_mqa = ggml_mul_mat(ctx0, model.layers[il].wq_mqa, cur);
                     cb(q_mqa, "q_mqa", il);
+                    print_tensor_debug_info(q_mqa);
                 }
 
                 // {n_embd_head_qk_nope, n_head, n_tokens}
