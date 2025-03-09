@@ -93,7 +93,7 @@ bool llama_kv_cache_init(
 
         ggml_tensor * k;
         ggml_tensor * v;
-        if (false && model.arch == LLM_ARCH_DEEPSEEK2 /* && TODO: MLA */) {
+        if (/*false &&*/ model.arch == LLM_ARCH_DEEPSEEK2 /* && TODO: MLA */) {
             const uint32_t n_embd_head_qk_rope = hparams.n_rot;
             const uint32_t kv_lora_rank = hparams.n_lora_kv;
             k = ggml_new_tensor_1d(ctx, type_k, (kv_lora_rank+n_embd_head_qk_rope)*kv_size);
