@@ -6596,7 +6596,7 @@ struct llm_build_context {
                     cb(kq, "kq", il);
 
                     // {n_kv, n_tokens, n_head}
-                    struct ggml_tensor * kq_view = ggml_view_3d(ctx0, kq, n_kv, n_head, n_tokens
+                    struct ggml_tensor * kq_view = ggml_view_3d(ctx0, kq, n_kv, n_head, n_tokens,
                     		ggml_row_size(kq->type, n_kv),
 							ggml_row_size(kq->type, n_kv * n_tokens),
 							0);
