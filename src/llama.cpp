@@ -6602,7 +6602,7 @@ struct llm_build_context {
 							0);
                     cb(kq_view, "kq_view", il);
 
-                    kq_view = ggml_permute(ctx0, kq_view, 0, 2, 1, 3);
+                    kq_view = ggml_cont(ctx0, ggml_permute(ctx0, kq_view, 0, 2, 1, 3));
 
                     struct ggml_tensor * kq_soft_max = ggml_soft_max_ext(ctx0, kq_view, KQ_mask, kq_scale, hparams.f_max_alibi_bias);
                     cb(kq_soft_max, "kq_soft_max", il);
