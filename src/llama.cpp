@@ -6415,11 +6415,11 @@ struct llm_build_context {
             // self_attention
             {
             	auto print_tensor_debug_info = [](const struct ggml_tensor* tensor) {
-            	    printf("tensor: %8d %8d %8d %8d\n", tensor->ne[0], tensor->ne[1], tensor->ne[2], tensor->ne[3]);
-            	    printf("       %8d %8d %8d %8d\n", tensor->nb[0], tensor->nb[1], tensor->nb[2], tensor->nb[3]);
             	    printf("tensor is contiguous %d, transposed %d, type = %s, name = %s\n",
             	           ggml_is_contiguous(tensor), ggml_is_transposed(tensor),
             	           ggml_type_name(tensor->type), tensor->name);
+            	    printf("tensor: %8d %8d %8d %8d\n\n", tensor->ne[0], tensor->ne[1], tensor->ne[2], tensor->ne[3]);
+            	    //printf("        %8d %8d %8d %8d\n\n", tensor->nb[0], tensor->nb[1], tensor->nb[2], tensor->nb[3]);
             	};
 
             	struct ggml_tensor * q_nope;
@@ -6427,24 +6427,20 @@ struct llm_build_context {
                 if (!is_lite) {
                     // {n_embd, q_lora_rank} * {n_embd, n_tokens} -> {q_lora_rank, n_tokens}
                 	struct ggml_tensor * q_compressed = ggml_mul_mat(ctx0, model.layers[il].wq_a, cur);
-                	print_tensor_debug_info(q_compressed);
                     cb(q_compressed, "q_compressed", il);
 
                     q_compressed = llm_build_norm(ctx0, q_compressed, hparams,
                             model.layers[il].attn_q_a_norm, NULL,
                             LLM_NORM_RMS, cb, il);
                     cb(q_compressed, "q_compressed_norm", il);
-                    print_tensor_debug_info(q_compressed);
 
                     // {q_lora_rank, n_head * n_embd_head_qk_nope} * {q_lora_rank, n_tokens} -> {n_head * n_embd_head_qk_nope, n_tokens}
                     q_nope = ggml_mul_mat(ctx0, model.layers[il].wq_b, q_compressed);
                     cb(q_nope, "q_nope", il);
-                    print_tensor_debug_info(q_nope);
 
                     // {q_lora_rank, n_head * n_embd_head_qk_rope} * {q_lora_rank, n_tokens} -> {n_head * n_embd_head_qk_rope, n_tokens}
                     q_mqa = ggml_mul_mat(ctx0, model.layers[il].wq_b_mqa, q_compressed);
                     cb(q_mqa, "q_mqa", il);
-                    print_tensor_debug_info(q_mqa);
                 } else {
                     // {n_embd, n_head * n_embd_head_qk_nope} * {n_embd, n_tokens} -> {n_head * n_embd_head_qk_nope, n_tokens}
                     q_nope = ggml_mul_mat(ctx0, model.layers[il].wq, cur);
@@ -6541,28 +6537,34 @@ struct llm_build_context {
 							ggml_row_size(model.layers[il].wk_b->type, kv_lora_rank * n_embd_head_qk_nope),
 							0);
                     cb(wk_b_view, "wk_b_view", il);
+                    print_tensor_debug_info(wk_b_view);
 
                 	// {n_embd_head_qk_nope, n_tokens, n_head}
                 	q_nope_view = ggml_permute(ctx0, q_nope_view, 0, 2, 1, 3);
                     cb(q_nope_view, "q_nope_view_perm", il);
+                    print_tensor_debug_info(q_nope_view);
 
                     // {n_embd_head_qk_nope, kv_lora_rank, n_head} * {n_embd_head_qk_nope, n_tokens, n_head} = {kv_lora_rank, n_tokens, n_head}
                     struct ggml_tensor * q_nope_absorbed = ggml_mul_mat(ctx0, wk_b_view, q_nope_view);
                     cb(q_nope_absorbed, "q_nope_absorbed", il);
+                    print_tensor_debug_info(q_nope_absorbed);
 
                     // {n_embd_head_qk_rope, n_tokens, n_head}
                     q_mqa_view = ggml_permute(ctx0, q_mqa_view, 0, 2, 1, 3);
                     cb(q_mqa_view, "q_mqa_view_perm", il);
+                    print_tensor_debug_info(q_mqa_view);
 
                     // {kv_lora_rank + n_embd_head_qk_rope, n_tokens, n_head}
                     struct ggml_tensor * q_compressed = ggml_concat(ctx0, q_nope_absorbed, q_mqa_view, 0);
                     cb(q_compressed, "q_compressed", il);
+                    print_tensor_debug_info(q_compressed);
 
                     // {kv_lora_rank + n_embd_head_qk_rope, n_head * n_tokens}
                     struct ggml_tensor * q_compressed_view = ggml_view_2d(ctx0, q_compressed, kv_lora_rank + n_embd_head_qk_rope, n_head * n_tokens,
                     		ggml_row_size(q_compressed->type, kv_lora_rank + n_embd_head_qk_rope),
 							0);
                     cb(q_compressed_view, "q_compressed_view", il);
+                    print_tensor_debug_info(q_compressed_view);
 
                     // {kv_lora_rank, 1, n_tokens}
     				struct ggml_tensor * kv_compressed_view = ggml_view_3d(ctx0, kv_compressed, kv_lora_rank, 1, n_tokens,
@@ -6570,31 +6572,37 @@ struct llm_build_context {
     						ggml_row_size(kv_compressed->type, kv_lora_rank),
     						0);
     				cb(kv_compressed_view, "kv_compressed_view", il);
+    				print_tensor_debug_info(kv_compressed_view);
 
                     // {kv_lora_rank + n_embd_head_qk_rope, 1, n_tokens}
                     struct ggml_tensor * k_compressed = ggml_concat(ctx0, kv_compressed_view, k_mqa_view, 0);
                     cb(k_compressed, "k_compressed", il);
+                    print_tensor_debug_info(k_compressed);
 
                     // {kv_lora_rank + n_embd_head_qk_rope, n_tokens}
     				struct ggml_tensor * k_compressed_view = ggml_view_2d(ctx0, k_compressed, kv_lora_rank + n_embd_head_qk_rope, n_tokens,
     						ggml_row_size(k_compressed->type, kv_lora_rank + n_embd_head_qk_rope),
     						0);
     				cb(k_compressed_view, "k_compressed_view", il);
+    				print_tensor_debug_info(k_compressed_view);
 
                     // {n_tokens, kv_lora_rank}
                     struct ggml_tensor * v_compressed_trans = ggml_transpose(ctx0, kv_compressed);
                     cb(v_compressed_trans, "v_compressed_trans", il);
+                    print_tensor_debug_info(v_compressed_trans);
 
                     // {n_tokens * (kv_lora_rank + n_embd_head_qk_rope)}
                     struct ggml_tensor * k_cache_slots_view = ggml_view_1d(ctx0, kv_self.k_l[il], n_tokens * (kv_lora_rank + n_embd_head_qk_rope),
                     		ggml_row_size(kv_self.k_l[il]->type, kv_lora_rank + n_embd_head_qk_rope) * kv_head);
                     cb(k_cache_slots_view, "k_cache_slots_view", il);
+                    print_tensor_debug_info(k_cache_slots_view);
 
                     // {n_tokens, kv_lora_rank}
                     struct ggml_tensor * v_cache_trans_slots_view = ggml_view_2d(ctx0, kv_self.v_l[il], n_tokens, kv_lora_rank,
                     		ggml_row_size(kv_self.v_l[il]->type, kv_self.size),
 							ggml_row_size(kv_self.v_l[il]->type, kv_head));
                     cb(v_cache_trans_slots_view, "v_cache_trans_slots_view", il);
+                    print_tensor_debug_info(v_cache_trans_slots_view);
 
                     ggml_build_forward_expand(gf, ggml_cpy(ctx0, k_compressed_view, k_cache_slots_view));
                     ggml_build_forward_expand(gf, ggml_cpy(ctx0, v_compressed_trans, v_cache_trans_slots_view));
@@ -6604,17 +6612,20 @@ struct llm_build_context {
                     		ggml_row_size(kv_self.k_l[il]->type, kv_lora_rank + n_embd_head_qk_rope),
 							0);
                     cb(k_cache_view, "k_cache_view", il);
+                    print_tensor_debug_info(k_cache_view);
 
                     // {n_kv, kv_lora_rank}
                     struct ggml_tensor * v_cache_trans_view = ggml_view_2d(ctx0, kv_self.v_l[il], n_kv, kv_lora_rank,
                     		ggml_row_size(kv_self.v_l[il]->type, kv_self.size),
 							0);
                     cb(v_cache_trans_view, "v_cache_trans_view", il);
+                    print_tensor_debug_info(v_cache_trans_view);
 
                     // {kv_lora_rank + n_embd_head_qk_rope, n_kv} * {kv_lora_rank + n_embd_head_qk_rope, n_head * n_tokens} = {n_kv, n_head * n_tokens}
                     struct ggml_tensor * kq = ggml_mul_mat(ctx0, k_cache_view, q_compressed_view);
                     //ggml_mul_mat_set_prec(kq, GGML_PREC_F32);
                     cb(kq, "kq", il);
+                    print_tensor_debug_info(kq);
 
                     // {n_kv, n_tokens, n_head}
                     struct ggml_tensor * kq_view = ggml_view_3d(ctx0, kq, n_kv, n_tokens, n_head,
@@ -6622,20 +6633,24 @@ struct llm_build_context {
 							ggml_row_size(kq->type, n_kv * n_tokens),
 							0);
                     cb(kq_view, "kq_view", il);
+                    print_tensor_debug_info(kq_view);
 
                     struct ggml_tensor * kq_soft_max = ggml_soft_max_ext(ctx0, kq_view, KQ_mask, kq_scale, hparams.f_max_alibi_bias);
                     cb(kq_soft_max, "kq_soft_max", il);
+                    print_tensor_debug_info(kq_soft_max);
 
                     // {n_kv, n_head * n_tokens}
                     struct ggml_tensor * kq_soft_max_view = ggml_view_2d(ctx0, kq_soft_max, n_kv, n_head * n_tokens,
                     		ggml_row_size(kq_soft_max->type, n_kv),
 							0);
                     cb(kq_soft_max_view, "kq_soft_max_view", il);
+                    print_tensor_debug_info(kq_soft_max_view);
 
                     // {n_kv, kv_lora_rank} * {n_kv, n_head * n_tokens} = {kv_lora_rank, n_head * n_tokens}
                     struct ggml_tensor * kqv_compressed = ggml_mul_mat(ctx0, v_cache_trans_view, kq_soft_max_view);
                     //ggml_mul_mat_set_prec(kqv_compressed, GGML_PREC_F32);
                     cb(kqv_compressed, "kqv_compressed,", il);
+                    print_tensor_debug_info(kqv_compressed);
 
                     // {kv_lora_rank, n_embd_head_v, n_head}
                     struct ggml_tensor * wv_b_view = ggml_view_3d(ctx0, model.layers[il].wv_b, kv_lora_rank, n_embd_head_v, n_head,
@@ -6643,6 +6658,7 @@ struct llm_build_context {
 							ggml_row_size(model.layers[il].wv_b->type, kv_lora_rank * n_embd_head_v),
 							0);
                     cb(wv_b_view, "wv_b_view", il);
+                    print_tensor_debug_info(wv_b_view);
 
                     // {kv_lora_rank, n_tokens, n_head}
                     struct ggml_tensor * kqv_compressed_view = ggml_view_3d(ctx0, kqv_compressed, kv_lora_rank, n_tokens, n_head,
@@ -6650,23 +6666,28 @@ struct llm_build_context {
 							ggml_row_size(kqv_compressed->type, kv_lora_rank * n_tokens),
 							0);
                     cb(kqv_compressed_view, "kqv_compressed_view", il);
+                    print_tensor_debug_info(kqv_compressed_view);
 
                     // {kv_lora_rank, n_embd_head_v, n_head} * {kv_lora_rank, n_tokens, n_head} = {n_embd_head_v, n_tokens, n_head}
                     struct ggml_tensor * kqv = ggml_mul_mat(ctx0, wv_b_view, kqv_compressed_view);
                     cb(kqv, "kqv", il);
+                    print_tensor_debug_info(kqv);
 
                     // {n_embd_head_v, n_head, n_tokens}
                     kqv = ggml_permute(ctx0, kqv, 0, 2, 1, 3);
                     cb(kqv, "kqv_perm", il);
+                    print_tensor_debug_info(kqv);
 
                     // {n_head * n_embd_head_v, n_tokens}
                     cur = ggml_cont_2d(ctx0, kqv, n_head * n_embd_head_v, n_tokens);
                     cb(cur, "kqv_cont", il);
+                    print_tensor_debug_info(cur);
 
                     ggml_build_forward_expand(gf, cur);
 
                     cur = llm_build_lora_mm(lctx, ctx0, model.layers[il].wo, cur);
                     cb(cur, "kqv_out", il);
+                    print_tensor_debug_info(cur);
 
                 }
 
