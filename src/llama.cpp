@@ -6550,8 +6550,14 @@ struct llm_build_context {
 							0);
                     cb(q_compressed_view, "q_compressed_view", il);
 
+    				// {n_embd_head_qk_rope, n_tokens}
+    				struct ggml_tensor * k_mqa_view_2d = ggml_view_2d(ctx0, k_mqa_view, n_embd_head_qk_rope, n_tokens,
+    						ggml_row_size(k_mqa->type, n_embd_head_qk_rope),
+    						0);
+    				cb(k_mqa_view_2d, "k_mqa_view_2d", il);
+
                     // {kv_lora_rank + n_embd_head_qk_rope, n_tokens}
-                    struct ggml_tensor * k_compressed = ggml_concat(ctx0, kv_compressed, k_mqa, 0);
+                    struct ggml_tensor * k_compressed = ggml_concat(ctx0, kv_compressed, k_mqa_view_2d, 0);
                     cb(k_compressed, "k_compressed", il);
 
                     // {n_tokens, kv_lora_rank}
