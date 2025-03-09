@@ -6575,7 +6575,7 @@ struct llm_build_context {
 							ggml_row_size(kv_self.v_l[il]->type, kv_head));
                     cb(v_cache_trans_slots_view, "v_cache_trans_slots_view", il);
 
-                    ggml_build_forward_expand(gf, ggml_cpy(ctx0, k_compressed_view, k_cache_slots_view));
+                    ggml_build_forward_expand(gf, ggml_cpy(ctx0, k_compressed, k_cache_slots_view));
                     ggml_build_forward_expand(gf, ggml_cpy(ctx0, v_compressed_trans, v_cache_trans_slots_view));
 
                     // {kv_lora_rank + n_embd_head_qk_rope, n_kv}
