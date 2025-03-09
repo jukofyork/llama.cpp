@@ -6492,7 +6492,7 @@ struct llm_build_context {
 				cb(k_mqa_view, "k_mqa_view_rope", il);
 
                 // non-MLA
-                if (false) {
+                if (true) {
 					// {kv_lora_rank, n_head * n_embd_head_qk_nope} * {kv_lora_rank, n_tokens} -> {n_head * n_embd_head_qk_nope, n_tokens}
 					struct ggml_tensor * k_nope = ggml_mul_mat(ctx0, model.layers[il].wk_b, kv_compressed);
 					cb(k_nope, "k_nope", il);
