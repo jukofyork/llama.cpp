@@ -6537,8 +6537,8 @@ struct llm_build_context {
                     cb(q_nope_absorbed, "q_nope_absorbed", il);
 
                     // {n_embd_head_qk_rope, n_tokens, n_head}
-                    q_mqa_view = ggml_permute(ctx0, q_mqa_view, 0, 2, 1, 3);
-                    cb(q_mqa_view, "q_mqa_view_perm", il);
+                    q_mqa_view = ggml_permute(ctx0, q_nope_view, 0, 2, 1, 3);
+                    cb(q_nope_view_perm, "q_nope_view_perm", il);
 
                     // {kv_lora_rank + n_embd_head_qk_rope, n_tokens, n_head}
                     struct ggml_tensor * q_compressed = ggml_concat(ctx0, q_nope_absorbed, q_mqa_view, 0);
