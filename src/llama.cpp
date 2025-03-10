@@ -6544,6 +6544,12 @@ struct llm_build_context {
                     struct ggml_tensor * q_compressed = ggml_concat(ctx0, q_nope_absorbed, q_mqa_view, 0);
                     cb(q_compressed, "q_compressed", il);
 
+                    // {kv_lora_rank + n_embd_head_qk_rope, n_head * n_tokens}
+                    struct ggml_tensor * q_compressed_view = ggml_view_2d(ctx0, q_compressed, kv_lora_rank + n_embd_head_qk_rope, n_head * n_tokens,
+                    		ggml_row_size(q_compressed->type, kv_lora_rank + n_embd_head_qk_rope),
+							0);
+                    cb(q_compressed_view, "q_compressed_view", il);
+
                     // {kv_lora_rank + n_embd_head_qk_rope, n_tokens}
                     struct ggml_tensor * k_mqa_view_2d = ggml_view_2d(ctx0, k_mqa_view, n_embd_head_qk_rope, n_tokens,
                             ggml_row_size(k_mqa_view->type, n_embd_head_qk_rope),
@@ -6559,9 +6565,12 @@ struct llm_build_context {
                     cb(v_compressed_trans, "v_compressed_trans", il);
 
                     // {n_tokens * (kv_lora_rank + n_embd_head_qk_rope)}
-                    struct ggml_tensor * k_cache_slots_view = ggml_view_1d(ctx0, kv_self.k_l[il], n_tokens * (kv_lora_rank + n_embd_head_qk_rope),
+                    struct ggml_tensor * k_cache_slots_view = ggml_view_2d(ctx0, kv_self.k_l[il], kv_lora_rank + n_embd_head_qk_rope, n_tokens,
+                    		ggml_row_size(kv_self.k_l[il]->type, kv_lora_rank + n_embd_head_qk_rope),
                     		ggml_row_size(kv_self.k_l[il]->type, kv_lora_rank + n_embd_head_qk_rope) * kv_head);
                     cb(k_cache_slots_view, "k_cache_slots_view", il);
+
+                    ggml_build_forward_expand(gf, ggml_cpy(ctx0, k_compressed, k_cache_slots_view));
 
                     // {n_tokens, kv_lora_rank}
                     struct ggml_tensor * v_cache_trans_slots_view = ggml_view_2d(ctx0, kv_self.v_l[il], n_tokens, kv_lora_rank,
@@ -6569,7 +6578,6 @@ struct llm_build_context {
 							ggml_row_size(kv_self.v_l[il]->type, kv_head));
                     cb(v_cache_trans_slots_view, "v_cache_trans_slots_view", il);
 
-                    ggml_build_forward_expand(gf, ggml_cpy(ctx0, k_compressed, k_cache_slots_view));
                     ggml_build_forward_expand(gf, ggml_cpy(ctx0, v_compressed_trans, v_cache_trans_slots_view));
 
                     // {kv_lora_rank + n_embd_head_qk_rope, n_kv}
@@ -6585,11 +6593,18 @@ struct llm_build_context {
                     cb(v_cache_trans_view, "v_cache_trans_view", il);
 
                     // {kv_lora_rank + n_embd_head_qk_rope, n_kv} * {kv_lora_rank + n_embd_head_qk_rope, n_head * n_tokens} = {n_kv, n_head * n_tokens}
-                    struct ggml_tensor * kq = ggml_mul_mat(ctx0, k_cache_view, q_compressed);
+                    struct ggml_tensor * kq = ggml_mul_mat(ctx0, k_cache_view, q_compressed_view);
                     //ggml_mul_mat_set_prec(kq, GGML_PREC_F32);
                     cb(kq, "kq", il);
 
-                    struct ggml_tensor * kq_soft_max = ggml_soft_max_ext(ctx0, kq, KQ_mask, kq_scale, hparams.f_max_alibi_bias);
+                    // {n_kv, n_tokens, n_head}
+                    struct ggml_tensor * kq_view = ggml_view_3d(ctx0, kq, n_kv, n_tokens, n_head,
+                    		ggml_row_size(kq->type, n_kv),
+							ggml_row_size(kq->type, n_kv * n_tokens),
+							0);
+                    cb(kq_view, "kq_view", il);
+
+                    struct ggml_tensor * kq_soft_max = ggml_soft_max_ext(ctx0, kq_view, KQ_mask, kq_scale, hparams.f_max_alibi_bias);
                     cb(kq_soft_max, "kq_soft_max", il);
 
                     // {n_kv, n_head * n_tokens}
