@@ -583,17 +583,17 @@ static struct ggml_tensor * llm_build_kqv(
     // note: MLA caches compressed KV and acts as MQA until the final wv_b expansion
     if (wv_b) {
     	n_head_kv           = 1;
-    	n_embd_k            = hparams.n_lora_kv + hparams.n_rot;
-    	n_embd_head_k       = n_embd_k;
-    	n_embd_v            = hparams.n_lora_kv;
-    	n_embd_head_v       = n_embd_v;
-    	n_embd_head_v_final = hparams.n_embd_v_gqa(il); // after multiplying by wv_b
+    	n_embd_head_k       = hparams.n_lora_kv + hparams.n_rot;
+    	n_embd_k            = n_embd_head_k;
+    	n_embd_head_v       = hparams.n_lora_kv;
+    	n_embd_v            = n_embd_head_v;
+    	n_embd_head_v_final = hparams.n_embd_head_v; // after multiplying by wv_b
     } else {
     	n_head_kv           = hparams.n_head_kv(il);
-    	n_embd_k            = hparams.n_embd_head_k;
-    	n_embd_head_k       = hparams.n_embd_k_gqa(il);
-    	n_embd_v            = hparams.n_embd_head_v;
-    	n_embd_head_v       = hparams.n_embd_v_gqa(il);
+    	n_embd_head_k       = hparams.n_embd_head_k;
+    	n_embd_k            = hparams.n_embd_k_gqa(il);
+    	n_embd_head_v       = hparams.n_embd_head_v;
+    	n_embd_v            = hparams.n_embd_v_gqa(il);
     	n_embd_head_v_final = n_embd_head_v;
     }
 
@@ -674,7 +674,15 @@ static struct ggml_tensor * llm_build_kqv(
         cb(kqv, "kqv", il);
 
         if (wv_b) {
-			kqv = ggml_mul_mat(ctx, wv_b, kqv);
+            // {kv_lora_rank, n_embd_head_v, n_head}
+            struct ggml_tensor * wv_b_view = ggml_view_3d(ctx0, model.layers[il].wv_b, kv_lora_rank, n_embd_head_v_final, n_head,
+            		ggml_row_size(model.layers[il].wv_b->type, kv_lora_rank),
+					ggml_row_size(model.layers[il].wv_b->type, kv_lora_rank * n_embd_head_v),
+					0);
+            cb(wv_b_view, "wv_b_view", il);
+        	printf("%d : %d %d %d %d %s\n", wv_b_view->ne[0], wv_b_view->ne[1], wv_b_view->ne[2], wv_b_view->ne[3], wv_b_view->name);
+        	printf("%d : %d %d %d %d %s\n", kqv->ne[0], kqv->ne[1], kqv->ne[2], kqv->ne[3], kqv->name);
+			kqv = ggml_mul_mat(ctx, wv_b_view, kqv);
 			cb(kqv, "kqv_wv_b", il);
         }
 
@@ -6599,15 +6607,8 @@ struct llm_build_context {
                     struct ggml_tensor * v_states = kv_compressed_view;
                     cb(v_states, "v_states", il);
 
-                    // {kv_lora_rank, n_embd_head_v, n_head}
-                    struct ggml_tensor * wv_b_view = ggml_view_3d(ctx0, model.layers[il].wv_b, kv_lora_rank, n_embd_head_v, n_head,
-                    		ggml_row_size(model.layers[il].wv_b->type, kv_lora_rank),
-							ggml_row_size(model.layers[il].wv_b->type, kv_lora_rank * n_embd_head_v),
-							0);
-                    cb(wv_b_view, "wv_b_view", il);
-
 					cur = llm_build_kv(ctx0, lctx, kv_self, gf,
-							wv_b_view, model.layers[il].wo, nullptr,
+							model.layers[il].wv_b, model.layers[il].wo, nullptr,
 							k_states, v_states, q_states, KQ_mask, n_tokens, kv_head, n_kv, kq_scale, cb, il);
                 }
 
