@@ -93,12 +93,14 @@ bool llama_kv_cache_init(
 
         int64_t n_embd_k;
         int64_t n_embd_v;
+
+        // note: deepseek-mla stores the compressed versions
         if (model.arch == LLM_ARCH_DEEPSEEK2) {
         	n_embd_k = hparams.n_lora_kv + hparams.n_rot;
         	n_embd_v = hparams.n_lora_kv;
         } else {
-        	n_embd_k = hparams.n_embd_k_gqa;
-            n_embd_v = hparams.n_embd_v_gqa;
+        	n_embd_k = hparams.n_embd_k_gqa(i);
+            n_embd_v = hparams.n_embd_v_gqa(i);
         }
 
         ggml_tensor * k = ggml_new_tensor_1d(ctx, type_k, n_embd_k*kv_size);
