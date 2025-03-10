@@ -6565,12 +6565,9 @@ struct llm_build_context {
                     cb(v_compressed_trans, "v_compressed_trans", il);
 
                     // {n_tokens * (kv_lora_rank + n_embd_head_qk_rope)}
-                    struct ggml_tensor * k_cache_slots_view = ggml_view_2d(ctx0, kv_self.k_l[il], kv_lora_rank + n_embd_head_qk_rope, n_tokens,
-                    		ggml_row_size(kv_self.k_l[il]->type, kv_lora_rank + n_embd_head_qk_rope),
+                    struct ggml_tensor * k_cache_slots_view = ggml_view_1d(ctx0, kv_self.k_l[il], n_tokens * (kv_lora_rank + n_embd_head_qk_rope),
                     		ggml_row_size(kv_self.k_l[il]->type, kv_lora_rank + n_embd_head_qk_rope) * kv_head);
                     cb(k_cache_slots_view, "k_cache_slots_view", il);
-
-                    ggml_build_forward_expand(gf, ggml_cpy(ctx0, k_compressed, k_cache_slots_view));
 
                     // {n_tokens, kv_lora_rank}
                     struct ggml_tensor * v_cache_trans_slots_view = ggml_view_2d(ctx0, kv_self.v_l[il], n_tokens, kv_lora_rank,
@@ -6578,6 +6575,7 @@ struct llm_build_context {
 							ggml_row_size(kv_self.v_l[il]->type, kv_head));
                     cb(v_cache_trans_slots_view, "v_cache_trans_slots_view", il);
 
+                    ggml_build_forward_expand(gf, ggml_cpy(ctx0, k_compressed, k_cache_slots_view));
                     ggml_build_forward_expand(gf, ggml_cpy(ctx0, v_compressed_trans, v_cache_trans_slots_view));
 
                     // {kv_lora_rank + n_embd_head_qk_rope, n_kv}
@@ -6594,7 +6592,7 @@ struct llm_build_context {
 
                     // {kv_lora_rank + n_embd_head_qk_rope, n_kv} * {kv_lora_rank + n_embd_head_qk_rope, n_head * n_tokens} = {n_kv, n_head * n_tokens}
                     struct ggml_tensor * kq = ggml_mul_mat(ctx0, k_cache_view, q_compressed_view);
-                    //ggml_mul_mat_set_prec(kq, GGML_PREC_F32);
+                    ggml_mul_mat_set_prec(kq, GGML_PREC_F32);
                     cb(kq, "kq", il);
 
                     // {n_kv, n_tokens, n_head}
@@ -6615,7 +6613,7 @@ struct llm_build_context {
 
                     // {n_kv, kv_lora_rank} * {n_kv, n_head * n_tokens} = {kv_lora_rank, n_head * n_tokens}
                     struct ggml_tensor * kqv_compressed = ggml_mul_mat(ctx0, v_cache_trans_view, kq_soft_max_view);
-                    //ggml_mul_mat_set_prec(kqv_compressed, GGML_PREC_F32);
+                    ggml_mul_mat_set_prec(kqv_compressed, GGML_PREC_F32);
                     cb(kqv_compressed, "kqv_compressed,", il);
 
                     // {kv_lora_rank, n_embd_head_v, n_head}
