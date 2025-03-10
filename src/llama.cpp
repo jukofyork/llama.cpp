@@ -570,8 +570,8 @@ static struct ggml_tensor * llm_build_kqv(
     const llama_hparams & hparams = lctx.model.hparams;
     const llama_cparams & cparams = lctx.cparams;
 
-    const int64_t n_ctx         = cparams.n_ctx;
-    const int64_t n_head        = hparams.n_head(il);
+    const int64_t n_ctx  = cparams.n_ctx;
+    const int64_t n_head = hparams.n_head(il);
 
     int64_t n_head_kv;
     int64_t n_embd_k;
@@ -580,13 +580,13 @@ static struct ggml_tensor * llm_build_kqv(
     int64_t n_embd_head_v;
     int64_t n_embd_head_v_final;
 
-    // note: deepseek-mla stores the compressed versions
-    if (model.arch == LLM_ARCH_DEEPSEEK2) {
+    // note: MLA caches compressed KV and acts as MQA until the final wv_b expansion
+    if (wv_b) {
     	n_head_kv           = 1;
     	n_embd_k            = hparams.n_lora_kv + hparams.n_rot;
-    	n_embd_head_k       = n_embd_head_k;
+    	n_embd_head_k       = n_embd_k;
     	n_embd_v            = hparams.n_lora_kv;
-    	n_embd_head_v       = n_embd_head_v;
+    	n_embd_head_v       = n_embd_v;
     	n_embd_head_v_final = hparams.n_embd_v_gqa(il); // after multiplying by wv_b
     } else {
     	n_head_kv           = hparams.n_head_kv(il);
@@ -614,6 +614,8 @@ static struct ggml_tensor * llm_build_kqv(
         GGML_UNUSED(model);
         GGML_UNUSED(n_ctx);
 
+        GGML_ASSERT(!wv_b); // MLA creates emebddings too large for FA: https://github.com/ggml-org/llama.cpp/pull/12227
+
         // split cached v into n_head heads (not transposed)
         struct ggml_tensor * v =
             ggml_view_3d(ctx, kv.v_l[il],
@@ -628,7 +630,7 @@ static struct ggml_tensor * llm_build_kqv(
 
         ggml_flash_attn_ext_set_prec(cur, GGML_PREC_F32);
 
-        cur = ggml_reshape_2d(ctx, cur, n_embd_head_v_final*n_head, n_tokens);
+        cur = ggml_reshape_2d(ctx, cur, n_embd_head_v*n_head, n_tokens);
     } else {
         struct ggml_tensor * kq = ggml_mul_mat(ctx, k, q);
         cb(kq, "kq", il);
