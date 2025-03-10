@@ -97,8 +97,8 @@ bool llama_kv_cache_init(
         	n_embd_k = hparams.n_lora_kv + hparams.n_rot;
         	n_embd_v = hparams.n_lora_kv;
         } else {
-        	n_embd_k = hparams.n_embd_k_gqa(il);
-            n_embd_v = hparams.n_embd_v_gqa(il);
+        	n_embd_k = hparams.n_embd_k_gqa;
+            n_embd_v = hparams.n_embd_v_gqa;
         }
 
         ggml_tensor * k = ggml_new_tensor_1d(ctx, type_k, n_embd_k*kv_size);

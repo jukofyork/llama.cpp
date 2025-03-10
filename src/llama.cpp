@@ -667,7 +667,7 @@ static struct ggml_tensor * llm_build_kqv(
         cb(kqv, "kqv", il);
 
         if (wv_b) {
-			kqv = ggml_mul_mat(ctx0, wv_b, kqv);
+			kqv = ggml_mul_mat(ctx, wv_b, kqv);
 			cb(kqv, "kqv_wv_b", il);
         }
 
@@ -723,7 +723,7 @@ static struct ggml_tensor * llm_build_kv(
 
     struct ggml_tensor * cur;
 
-    cur  = llm_build_kqv(ctx, lctx, kv, graph, wo, bo, q_cur, kq_mask, n_tokens, n_kv, kq_scale, cb, il);
+    cur  = llm_build_kqv(ctx, lctx, kv, graph, wv_b, wo, bo, q_cur, kq_mask, n_tokens, n_kv, kq_scale, cb, il);
     cb(cur, "kqv_out", il);
 
     return cur;
@@ -5414,7 +5414,7 @@ struct llm_build_context {
                 }
 
                 cur = llm_build_kv(ctx0, lctx, kv_self, gf,
-                		model.layers[il].wo, model.layers[il].bo,
+                		nullptr, model.layers[il].wo, model.layers[il].bo,
 						Kcur, Vcur, Qcur, KQ_mask_l, n_tokens, kv_head, n_kv, 1.0f / sqrtf(float(n_embd_head)), cb, il);
             }
 
