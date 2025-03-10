@@ -177,7 +177,7 @@ static void llm_build_kv_store(
     int64_t n_embd_v;
 
     // note: deepseek-mla stores the compressed versions
-    if (model.arch == LLM_ARCH_DEEPSEEK2) {
+    if (cparams.mla_attn && model.arch == LLM_ARCH_DEEPSEEK2) {
         n_embd_k = hparams.n_lora_kv + hparams.n_rot;
         n_embd_v = hparams.n_lora_kv;
     } else {
@@ -581,20 +581,21 @@ static struct ggml_tensor * llm_build_kqv(
     int64_t n_embd_head_v_final;
 
     // note: MLA caches compressed KV and acts as MQA until the final wv_b expansion
-    if (wv_b) {
-         n_head_kv           = 1;
-         n_embd_head_k       = hparams.n_lora_kv + hparams.n_rot;
-         n_embd_k            = n_embd_head_k;
-         n_embd_head_v       = hparams.n_lora_kv;
-         n_embd_v            = n_embd_head_v;
-         n_embd_head_v_final = hparams.n_embd_head_v; // after multiplying by wv_b
+    if (cparams.mla_attn && model.arch == LLM_ARCH_DEEPSEEK2) {
+        GGML_ASSERT(wv_b);
+        n_head_kv           = 1;
+        n_embd_head_k       = hparams.n_lora_kv + hparams.n_rot;
+        n_embd_k            = n_embd_head_k;
+        n_embd_head_v       = hparams.n_lora_kv;
+        n_embd_v            = n_embd_head_v;
+        n_embd_head_v_final = hparams.n_embd_head_v; // after multiplying by wv_b
     } else {
-         n_head_kv           = hparams.n_head_kv(il);
-         n_embd_head_k       = hparams.n_embd_head_k;
-         n_embd_k            = hparams.n_embd_k_gqa(il);
-         n_embd_head_v       = hparams.n_embd_head_v;
-         n_embd_v            = hparams.n_embd_v_gqa(il);
-         n_embd_head_v_final = n_embd_head_v;
+        n_head_kv           = hparams.n_head_kv(il);
+        n_embd_head_k       = hparams.n_embd_head_k;
+        n_embd_k            = hparams.n_embd_k_gqa(il);
+        n_embd_head_v       = hparams.n_embd_head_v;
+        n_embd_v            = hparams.n_embd_v_gqa(il);
+        n_embd_head_v_final = n_embd_head_v;
     }
 
     struct ggml_tensor * q = ggml_permute(ctx, q_cur, 0, 2, 1, 3);
@@ -6540,7 +6541,7 @@ struct llm_build_context {
                     cb(k_mqa_view, "k_mqa_view_rope", il);
 
                 // non-MLA
-                if (false) {
+                if (!cparams.mla_attn) {
                          // {kv_lora_rank, n_head * n_embd_head_qk_nope} * {kv_lora_rank, n_tokens} -> {n_head * n_embd_head_qk_nope, n_tokens}
                          struct ggml_tensor * k_nope = ggml_mul_mat(ctx0, model.layers[il].wk_b, kv_compressed);
                          cb(k_nope, "k_nope", il);
