@@ -6457,7 +6457,6 @@ struct llm_build_context {
                         0);
                 cb(q_mqa_view, "q_mqa_view", il);
 
-                q_mqa_view = ggml_cont(ctx0, q_mqa_view);
                 q_mqa_view = ggml_rope_ext(
                     ctx0, q_mqa_view, inp_pos, nullptr,
                     n_rot, rope_type, n_ctx_orig, freq_base, freq_scale,
@@ -6469,7 +6468,6 @@ struct llm_build_context {
 				struct ggml_tensor * kv_compressed = ggml_mul_mat(ctx0, model.layers[il].wkv_a, cur);
 				cb(kv_compressed, "kv_compressed", il);
 
-				kv_compressed = ggml_cont(ctx0, kv_compressed);
 				kv_compressed = llm_build_norm(ctx0, kv_compressed, hparams,
 						model.layers[il].attn_kv_a_norm, NULL,
 						LLM_NORM_RMS, cb, il);
@@ -6486,7 +6484,6 @@ struct llm_build_context {
 						0);
 				cb(k_mqa_view, "k_mqa_view", il);
 
-				k_mqa_view = ggml_cont(ctx0, k_mqa_view);
 				k_mqa_view = ggml_rope_ext(
 					ctx0, k_mqa_view, inp_pos, nullptr,
 					n_rot, rope_type, n_ctx_orig, freq_base, freq_scale,
@@ -6525,18 +6522,18 @@ struct llm_build_context {
                 }
                 else {
                     // {n_embd_head_qk_nope, kv_lora_rank, n_head}
-                    struct ggml_tensor * wk_b_view = ggml_view_3d(ctx0, model.layers[il].wk_b, n_embd_head_qk_nope, kv_lora_rank, n_head,
+                    struct ggml_tensor * wk_b_trans_view = ggml_view_3d(ctx0, model.layers[il].wk_b_trans, n_embd_head_qk_nope, kv_lora_rank, n_head,
                     		ggml_row_size(model.layers[il].wk_b->type, n_embd_head_qk_nope),
 							ggml_row_size(model.layers[il].wk_b->type, kv_lora_rank * n_embd_head_qk_nope),
 							0);
-                    cb(wk_b_view, "wk_b_view", il);
+                    cb(wk_b_trans_view, "wk_b_trans_view", il);
 
                 	// {n_embd_head_qk_nope, n_tokens, n_head}
                 	q_nope_view = ggml_permute(ctx0, q_nope_view, 0, 2, 1, 3);
                     cb(q_nope_view, "q_nope_view_perm", il);
 
                     // {n_embd_head_qk_nope, kv_lora_rank, n_head} * {n_embd_head_qk_nope, n_tokens, n_head} = {kv_lora_rank, n_tokens, n_head}
-                    struct ggml_tensor * q_nope_absorbed = ggml_mul_mat(ctx0, wk_b_view, q_nope_view);
+                    struct ggml_tensor * q_nope_absorbed = ggml_mul_mat(ctx0, wk_b_trans_view, q_nope_view);
                     cb(q_nope_absorbed, "q_nope_absorbed", il);
 
                     // {n_embd_head_qk_rope, n_tokens, n_head}
