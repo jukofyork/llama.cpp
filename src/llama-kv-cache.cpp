@@ -96,10 +96,10 @@ bool llama_kv_cache_init(
 
         // note: deepseek-mla stores the compressed versions
         if (model.arch == LLM_ARCH_DEEPSEEK2) {
-        	n_embd_k = hparams.n_lora_kv + hparams.n_rot;
-        	n_embd_v = hparams.n_lora_kv;
+            n_embd_k = hparams.n_lora_kv + hparams.n_rot;
+            n_embd_v = hparams.n_lora_kv;
         } else {
-        	n_embd_k = hparams.n_embd_k_gqa(i);
+            n_embd_k = hparams.n_embd_k_gqa(i);
             n_embd_v = hparams.n_embd_v_gqa(i);
         }
 
