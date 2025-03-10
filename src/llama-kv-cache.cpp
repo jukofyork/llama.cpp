@@ -91,17 +91,18 @@ bool llama_kv_cache_init(
             return false;
         }
 
-        ggml_tensor * k;
-        ggml_tensor * v;
-        if (/*false &&*/ model.arch == LLM_ARCH_DEEPSEEK2 /* && TODO: MLA */) {
-            const uint32_t n_embd_head_qk_rope = hparams.n_rot;
-            const uint32_t kv_lora_rank = hparams.n_lora_kv;
-            k = ggml_new_tensor_1d(ctx, type_k, (kv_lora_rank+n_embd_head_qk_rope)*kv_size);
-            v = ggml_new_tensor_1d(ctx, type_v, kv_lora_rank*kv_size);
+        int64_t n_embd_k;
+        int64_t n_embd_v;
+        if (model.arch == LLM_ARCH_DEEPSEEK2) {
+        	n_embd_k = hparams.n_lora_kv + hparams.n_rot;
+        	n_embd_v = hparams.n_lora_kv;
         } else {
-            k = ggml_new_tensor_1d(ctx, type_k, n_embd_k_gqa*kv_size);
-            v = ggml_new_tensor_1d(ctx, type_v, n_embd_v_gqa*kv_size);
+        	n_embd_k = hparams.n_embd_k_gqa(il);
+            n_embd_v = hparams.n_embd_v_gqa(il);
         }
+
+        ggml_tensor * k = ggml_new_tensor_1d(ctx, type_k, n_embd_k*kv_size);
+        ggml_tensor * v = ggml_new_tensor_1d(ctx, type_v, n_embd_v*kv_size);
 
         ggml_format_name(k, "cache_k_l%d", i);
         ggml_format_name(v, "cache_v_l%d", i);
