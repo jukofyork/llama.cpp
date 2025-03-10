@@ -6457,6 +6457,7 @@ struct llm_build_context {
                         0);
                 cb(q_mqa_view, "q_mqa_view", il);
 
+                q_mqa_view = ggml_cont(ctx0, q_mqa_view);
                 q_mqa_view = ggml_rope_ext(
                     ctx0, q_mqa_view, inp_pos, nullptr,
                     n_rot, rope_type, n_ctx_orig, freq_base, freq_scale,
@@ -6468,6 +6469,7 @@ struct llm_build_context {
 				struct ggml_tensor * kv_compressed = ggml_mul_mat(ctx0, model.layers[il].wkv_a, cur);
 				cb(kv_compressed, "kv_compressed", il);
 
+				kv_compressed = ggml_cont(ctx0, kv_compressed);
 				kv_compressed = llm_build_norm(ctx0, kv_compressed, hparams,
 						model.layers[il].attn_kv_a_norm, NULL,
 						LLM_NORM_RMS, cb, il);
@@ -6484,6 +6486,7 @@ struct llm_build_context {
 						0);
 				cb(k_mqa_view, "k_mqa_view", il);
 
+				k_mqa_view = ggml_cont(ctx0, k_mqa_view);
 				k_mqa_view = ggml_rope_ext(
 					ctx0, k_mqa_view, inp_pos, nullptr,
 					n_rot, rope_type, n_ctx_orig, freq_base, freq_scale,
@@ -6592,7 +6595,7 @@ struct llm_build_context {
 
                     // {kv_lora_rank + n_embd_head_qk_rope, n_kv} * {kv_lora_rank + n_embd_head_qk_rope, n_head * n_tokens} = {n_kv, n_head * n_tokens}
                     struct ggml_tensor * kq = ggml_mul_mat(ctx0, k_cache_view, q_compressed_view);
-                    ggml_mul_mat_set_prec(kq, GGML_PREC_F32);
+                    //ggml_mul_mat_set_prec(kq, GGML_PREC_F32);
                     cb(kq, "kq", il);
 
                     // {n_kv, n_tokens, n_head}
@@ -6613,7 +6616,7 @@ struct llm_build_context {
 
                     // {n_kv, kv_lora_rank} * {n_kv, n_head * n_tokens} = {kv_lora_rank, n_head * n_tokens}
                     struct ggml_tensor * kqv_compressed = ggml_mul_mat(ctx0, v_cache_trans_view, kq_soft_max_view);
-                    ggml_mul_mat_set_prec(kqv_compressed, GGML_PREC_F32);
+                    //ggml_mul_mat_set_prec(kqv_compressed, GGML_PREC_F32);
                     cb(kqv_compressed, "kqv_compressed,", il);
 
                     // {kv_lora_rank, n_embd_head_v, n_head}
