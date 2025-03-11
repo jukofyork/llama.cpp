@@ -6522,7 +6522,7 @@ struct llm_build_context {
                     struct ggml_tensor * q_states = ggml_concat(ctx0, q_nope_absorbed, q_pe, 0);
                     cb(q_states, "q_states", il);
 
-                    struct ggml_tensor * k_states = ggml_concat(ctx0, kv_compressed, k_pe_view, 0);
+                    struct ggml_tensor * k_states = ggml_concat(ctx0, kv_compressed, k_pe, 0);
                     cb(k_states, "k_states", il);
 
                     struct ggml_tensor * v_states = kv_compressed;
@@ -6561,10 +6561,14 @@ struct llm_build_context {
                     struct ggml_tensor * kqv_compressed = ggml_mul_mat(ctx0, v_cache_trans, kq_soft_max);
                     cb(kqv_compressed, "kqv_compressed,", il);
 
-                    kqv_compressed_view = ggml_view_3d(ctx0, kqv_compressed, kv_lora_rank, n_tokens, n_head, ggml_row_size(kqv_compressed->type, kv_lora_rank), ggml_row_size(kqv_compressed->type, kv_lora_rank * n_tokens), 0);
-                    cb(kqv_compressed_view, "kqv_compressed_view", il);
+                    kqv_compressed = ggml_view_3d(ctx0, kqv_compressed, kv_lora_rank, n_tokens, n_head, ggml_row_size(kqv_compressed->type, kv_lora_rank), ggml_row_size(kqv_compressed->type, kv_lora_rank * n_tokens), 0);
+                    cb(kqv_compressed, "kqv_compressed_view", il);
 
-                    struct ggml_tensor * kqv = ggml_mul_mat(ctx0, wv_b, kqv_compressed_view);
+                    struct ggml_tensor * wv_b = ggml_view_3d(ctx0, model.layers[il].wv_b, kv_lora_rank, n_embd_head_v, n_head, ggml_row_size(model.layers[il].wv_b->type,
+                                                             kv_lora_rank), ggml_row_size(model.layers[il].wv_b->type, kv_lora_rank * n_embd_head_v), 0);
+                    cb(wv_b, "wv_b", il);
+
+                    struct ggml_tensor * kqv = ggml_mul_mat(ctx0, wv_b, kqv_compressed);
                     cb(kqv, "kqv", il);
 
                     kqv = ggml_permute(ctx0, kqv, 0, 2, 1, 3);
@@ -9451,6 +9455,7 @@ struct llama_context_params llama_context_default_params() {
         /*.embeddings                  =*/ false,
         /*.offload_kqv                 =*/ true,
         /*.flash_attn                  =*/ false,
+        /*.mla_attn                    =*/ false,
         /*.no_perf                     =*/ true,
         /*.abort_callback              =*/ nullptr,
         /*.abort_callback_data         =*/ nullptr,
@@ -9687,6 +9692,7 @@ struct llama_context * llama_init_from_model(
     cparams.embeddings       = params.embeddings;
     cparams.offload_kqv      = params.offload_kqv;
     cparams.flash_attn       = params.flash_attn;
+    cparams.mla_attn         = params.mla_attn;
     cparams.no_perf          = params.no_perf;
     cparams.pooling_type     = params.pooling_type;
 

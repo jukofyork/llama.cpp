@@ -84,7 +84,7 @@ bool llama_kv_cache_init(
             n_embd_v = hparams.n_embd_v_gqa(i) + hparams.n_embd_v_s();
         }
 
-        LLAMA_LOG_DEBUG("%s: layer %d: n_embd_k = %d, n_embd_v = %d\n", __func__, i, n_embd_k, n_embd_v);
+        LLAMA_LOG_DEBUG("%s: layer %d: n_embd_k = %ld, n_embd_v = %ld\n", __func__, i, n_embd_k, n_embd_v);
 
         ggml_backend_buffer_type_t buft;
         if (offload) {
