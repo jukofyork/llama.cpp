@@ -1086,6 +1086,7 @@ struct llm_build_context {
     const int32_t n_ctx_orig;
 
     const bool flash_attn;
+    const bool mla_attn;
 
     const enum llama_pooling_type pooling_type;
     const enum llama_rope_type    rope_type;
@@ -1135,6 +1136,7 @@ struct llm_build_context {
         kv_head          (worst_case ? (kv_self.recurrent ? 0 : kv_self.size - n_tokens) : kv_self.head),
         n_ctx_orig       (cparams.n_ctx_orig_yarn),
         flash_attn       (cparams.flash_attn),
+        mla_attn         (cparams.mla_attn),
         pooling_type     (cparams.pooling_type),
         rope_type        (hparams.rope_type),
         cb               (cb),
@@ -9676,6 +9678,11 @@ struct llama_context * llama_init_from_model(
         return nullptr;
     }
 
+    if (params.mla_attn && model->arch != LLM_ARCH_DEEPSEEK2) {
+        LLAMA_LOG_WARN("%s: mla_attn is only compatible with Deepseek2 - forcing off\n", __func__);
+        params.mla_attn = false;
+    }
+
     llama_context * ctx = new llama_context(*model);
 
     const auto & hparams = model->hparams;
@@ -9760,6 +9767,7 @@ struct llama_context * llama_init_from_model(
     LLAMA_LOG_INFO("%s: n_batch       = %u\n",   __func__, cparams.n_batch);
     LLAMA_LOG_INFO("%s: n_ubatch      = %u\n",   __func__, cparams.n_ubatch);
     LLAMA_LOG_INFO("%s: flash_attn    = %d\n",   __func__, cparams.flash_attn);
+    LLAMA_LOG_INFO("%s: mla_attn      = %d\n",   __func__, cparams.mla_attn);
     LLAMA_LOG_INFO("%s: freq_base     = %.1f\n", __func__, cparams.rope_freq_base);
     LLAMA_LOG_INFO("%s: freq_scale    = %g\n",   __func__, cparams.rope_freq_scale);
 
