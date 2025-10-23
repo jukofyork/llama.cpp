@@ -248,16 +248,86 @@ struct ggml_backend_rpc_buffer_context {
 
 // RPC helper functions
 
-// Computes FNV-1a hash of the data
-static uint64_t fnv_hash(const uint8_t * data, size_t len) {
-    const uint64_t fnv_prime = 0x100000001b3ULL;
-    uint64_t hash = 0xcbf29ce484222325ULL;
+// Computes XXHash (64 bit) of data.
+// Based on: https://github.com/stbrumme/xxhash/blob/master/xxhash64.h
+static uint64_t xxhash64(const uint8_t * data, size_t len) {
+    // Single-function xxHash64-style implementation (seed = 0), no lambdas or memcpy.
 
-    for (size_t i = 0; i < len; ++i) {
-        hash ^= data[i];
-        hash *= fnv_prime;
+    const uint64_t Prime1 = 11400714785074694791ULL;
+    const uint64_t Prime2 = 14029467366897019727ULL;
+    const uint64_t Prime3 =  1609587929392839161ULL;
+    const uint64_t Prime4 =  9650029242287828579ULL;
+    const uint64_t Prime5 =   2870177450012600261ULL;
+
+    const uint8_t * p    = data;
+    const uint8_t * stop = data + len;
+
+    uint64_t h64;
+
+    if (len >= 32) {
+        const uint8_t * const limit = stop - 32;
+        const uint64_t seed = 0;
+
+        uint64_t v1 = seed + Prime1 + Prime2;
+        uint64_t v2 = seed + Prime2;
+        uint64_t v3 = seed + 0;
+        uint64_t v4 = seed - Prime1;
+
+        do {
+            uint64_t k1 = *(const uint64_t *)(p);      p += 8;
+            v1 += k1 * Prime2; v1 = (v1 << 31) | (v1 >> (64 - 31)); v1 *= Prime1;
+
+            uint64_t k2 = *(const uint64_t *)(p);      p += 8;
+            v2 += k2 * Prime2; v2 = (v2 << 31) | (v2 >> (64 - 31)); v2 *= Prime1;
+
+            uint64_t k3 = *(const uint64_t *)(p);      p += 8;
+            v3 += k3 * Prime2; v3 = (v3 << 31) | (v3 >> (64 - 31)); v3 *= Prime1;
+
+            uint64_t k4 = *(const uint64_t *)(p);      p += 8;
+            v4 += k4 * Prime2; v4 = (v4 << 31) | (v4 >> (64 - 31)); v4 *= Prime1;
+        } while (p <= limit);
+
+        h64  = ((v1 <<  1) | (v1 >> (64 -  1)));
+        h64 += ((v2 <<  7) | (v2 >> (64 -  7)));
+        h64 += ((v3 << 12) | (v3 >> (64 - 12)));
+        h64 += ((v4 << 18) | (v4 >> (64 - 18)));
+
+        v1 *= Prime2; v1 = (v1 << 31) | (v1 >> (64 - 31)); v1 *= Prime1; h64 ^= v1; h64 = h64 * Prime1 + Prime4;
+        v2 *= Prime2; v2 = (v2 << 31) | (v2 >> (64 - 31)); v2 *= Prime1; h64 ^= v2; h64 = h64 * Prime1 + Prime4;
+        v3 *= Prime2; v3 = (v3 << 31) | (v3 >> (64 - 31)); v3 *= Prime1; h64 ^= v3; h64 = h64 * Prime1 + Prime4;
+        v4 *= Prime2; v4 = (v4 << 31) | (v4 >> (64 - 31)); v4 *= Prime1; h64 ^= v4; h64 = h64 * Prime1 + Prime4;
+    } else {
+        h64 = Prime5;
     }
-    return hash;
+
+    h64 += (uint64_t)len;
+
+    while ((size_t)(stop - p) >= 8) {
+        uint64_t k1 = *(const uint64_t *)(p); p += 8;
+        k1 *= Prime2; k1 = (k1 << 31) | (k1 >> (64 - 31)); k1 *= Prime1;
+        h64 ^= k1;
+        h64 = ((h64 << 27) | (h64 >> (64 - 27))) * Prime1 + Prime4;
+    }
+
+    if ((size_t)(stop - p) >= 4) {
+        h64 ^= (uint64_t)(*(const uint32_t *)(p)) * Prime1;
+        h64 = ((h64 << 23) | (h64 >> (64 - 23))) * Prime2 + Prime3;
+        p += 4;
+    }
+
+    while (p < stop) {
+        h64 ^= (uint64_t)(*p) * Prime5;
+        h64 = ((h64 << 11) | (h64 >> (64 - 11))) * Prime1;
+        ++p;
+    }
+
+    h64 ^= h64 >> 33;
+    h64 *= Prime2;
+    h64 ^= h64 >> 29;
+    h64 *= Prime3;
+    h64 ^= h64 >> 32;
+
+    return h64;
 }
 
 static std::shared_ptr<socket_t> make_socket(sockfd_t fd) {
@@ -602,7 +672,7 @@ static void ggml_backend_rpc_buffer_set_tensor(ggml_backend_buffer_t buffer, ggm
         rpc_msg_set_tensor_hash_req request;
         request.tensor = rpc_tensor;
         request.offset = offset;
-        request.hash = fnv_hash((const uint8_t*)data, size);
+        request.hash = xxhash64((const uint8_t*)data, size);
         rpc_msg_set_tensor_hash_rsp response;
         bool status = send_rpc_cmd(ctx->sock, RPC_CMD_SET_TENSOR_HASH, &request, sizeof(request), &response, sizeof(response));
         RPC_STATUS_ASSERT(status);
@@ -1159,7 +1229,7 @@ bool rpc_server::set_tensor(const std::vector<uint8_t> & input) {
 
     const void * data = input.data() + sizeof(rpc_tensor) + sizeof(offset);
     if (cache_dir && size > HASH_THRESHOLD) {
-        uint64_t hash = fnv_hash((const uint8_t*)data, size);
+        uint64_t hash = xxhash64((const uint8_t*)data, size);
         char hash_str[17];
         snprintf(hash_str, sizeof(hash_str), "%016" PRIx64, hash);
         // save to cache_dir/hash_str
