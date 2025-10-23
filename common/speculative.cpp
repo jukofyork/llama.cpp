@@ -311,6 +311,7 @@ llama_tokens common_speculative_gen_draft(
 
     common_sampler_reset(smpl);
 
+#if 0
     // sample n_draft tokens from the draft model
     for (int i = 0; i < params.n_draft; ++i) {
         common_batch_clear(batch);
@@ -357,5 +358,66 @@ llama_tokens common_speculative_gen_draft(
             result.resize(params.n_draft);
         }
     }
+#else
+    // Hard-coded for 'GLM-4.6-Q5_X.gguf' for now
+    const std::vector<float> batch_costs = {
+        1,     0.803, 0.543, 0.427, 0.354, 0.303, 0.266, 0.245,
+        0.22,  0.201, 0.183, 0.168, 0.157, 0.146, 0.138, 0.13,
+        0.126, 0.12,  0.114, 0.109, 0.105, 0.101, 0.097, 0.094,
+        0.093, 0.089, 0.087, 0.084, 0.082, 0.08,  0.077, 0.075,
+        0.078, 0.076, 0.074, 0.072, 0.071, 0.069, 0.069, 0.066,
+        0.067, 0.067, 0.065, 0.064, 0.063, 0.062, 0.06,  0.06,
+        0.064, 0.063, 0.062, 0.061, 0.06,  0.059, 0.059, 0.058,
+        0.057, 0.056, 0.055, 0.055, 0.054, 0.053, 0.053, 0.052 };
+
+    float sequence_p = 1.0;
+
+    // sample n_draft tokens from the draft model
+    for (int i = 0; i < params.n_draft; ++i) {
+        common_batch_clear(batch);
+
+        common_sampler_sample(smpl, ctx, 0, true);
+
+        const auto * cur_p = common_sampler_get_candidates(smpl);
+
+        for (int k = 0; k < std::min(3, (int) cur_p->size); ++k) {
+            LOG_DBG(" - draft candidate %3d, pos %3d: %6d (%8.3f) '%s'\n",
+                    k, i, cur_p->data[k].id, cur_p->data[k].p, common_token_to_piece(ctx, cur_p->data[k].id).c_str());
+        }
+
+        // add drafted token for each sequence
+        const llama_token id = cur_p->data[0].id;
+
+        common_sampler_accept(smpl, id, true);
+
+        result.push_back(id);
+
+        if (params.n_draft <= (int) result.size()) {
+            break;
+        }
+
+        float token_p = cur_p->data[0].p;
+
+        // use the lower range of the expectile
+        // note: uses `--draft-p-min` parameter to pass in ALPHA
+        const float ALPHA = params.p_min;
+        token_p = ((1.0f - ALPHA) * token_p) / (1.0f - (ALPHA * token_p));
+
+        sequence_p *= token_p;
+
+        // only collect clearly +EV draft tokens
+        // note: repeats the final value if out of range, allowing `--draft-max` to > than batch_costs.size()
+        if (sequence_p <  batch_costs[std::min(result.size(), batch_costs_kimi.size() - 1)]) {
+            break;
+        }
+
+        common_batch_add(batch, id, n_past + i + 1, { 0 }, true);
+
+        // evaluate the drafted tokens on the draft model
+        llama_decode(ctx, batch);
+
+        prompt_dft.push_back(id);
+    }
+#endif
     return result;
 }
