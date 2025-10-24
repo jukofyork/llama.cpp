@@ -311,6 +311,22 @@ llama_tokens common_speculative_gen_draft(
 
     common_sampler_reset(smpl);
 
+    // read in from an environment variable for now
+    const std::vector<float> batch_costs = []() {
+        std::vector<float> costs;
+        if (const char* env = std::getenv("GGML_BATCH_COSTS")) {
+            for (const char* p = env; *p; ) {
+                char* end;
+                costs.push_back(std::strtof(p, &end));
+                p = *end == ',' ? end + 1 : end;
+            }
+        }
+        return costs;
+    }();
+    GGML_ASSERT(batch_costs.size() >= 2 && "GGML_BATCH_COSTS must have at least 2 values");
+
+    float sequence_p = 1.0;
+
     // sample n_draft tokens from the draft model
     for (int i = 0; i < params.n_draft; ++i) {
         common_batch_clear(batch);
@@ -329,14 +345,17 @@ llama_tokens common_speculative_gen_draft(
 
         common_sampler_accept(smpl, id, true);
 
-        result.push_back(id);
-
-        if (params.n_draft <= (int) result.size()) {
+        // only collect clearly +EV draft tokens
+        // note: this makes no attempt to look ahead and just breaks as soon as it sees a -EV sequence
+        // note: repeats the final value if out of range, allowing `--draft-max` to > than batch_costs.size()
+        sequence_p *= cur_p->data[0].p;
+        if (sequence_p < batch_costs[std::min(result.size() + 1, batch_costs.size() - 1)]) {
             break;
         }
 
-        // only collect very high-confidence draft tokens
-        if (cur_p->data[0].p < params.p_min) {
+        result.push_back(id);
+
+        if (params.n_draft <= (int) result.size()) {
             break;
         }
 
