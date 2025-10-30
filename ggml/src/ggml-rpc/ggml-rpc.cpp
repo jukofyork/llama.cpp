@@ -429,12 +429,13 @@ static std::shared_ptr<socket_t> create_server_socket(const char * host, int por
 }
 
 // Try use the volatile cache when data size is larger than this threshold
-const size_t CACHE_THRESHOLD = 1024 * 1024;
+const size_t MIN_CACHE_THRESHOLD = 20 * 1024;
+const size_t MAX_CACHE_THRESHOLD = 1024 * 1024;
 
 static bool send_data(sockfd_t sockfd, const void * data, size_t size) {
     static std::unordered_set<uint64_t> sent_hashes;
 
-    if (size >= CACHE_THRESHOLD) {
+    if (size > MIN_CACHE_THRESHOLD && size < MAX_CACHE_THRESHOLD) {
         uint64_t hash = generate_hash((const uint8_t*)data, size);
         bool is_new = sent_hashes.find(hash) == sent_hashes.end();
 
@@ -471,7 +472,7 @@ static bool recv_data(sockfd_t sockfd, void * data, size_t size) {
 
     uint64_t hash = 0;
 
-    if (size >= CACHE_THRESHOLD) {
+    if (size > MIN_CACHE_THRESHOLD && size < MAX_CACHE_THRESHOLD) {
         uint8_t flag;
         if (recv(sockfd, (char*)&flag, sizeof(flag), 0) != sizeof(flag)) {
             return false;
@@ -506,7 +507,7 @@ static bool recv_data(sockfd_t sockfd, void * data, size_t size) {
         bytes_recv += (size_t)n;
     }
 
-    if (size >= CACHE_THRESHOLD) {
+    if (size > MIN_CACHE_THRESHOLD && size < MAX_CACHE_THRESHOLD) {
         recv_cache[hash] = std::vector<uint8_t>((uint8_t*)data, (uint8_t*)data + size);
     }
 
