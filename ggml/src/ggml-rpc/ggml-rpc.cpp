@@ -428,7 +428,30 @@ static std::shared_ptr<socket_t> create_server_socket(const char * host, int por
     return sock;
 }
 
+// Try use the volatile cache when data size is larger than this threshold
+const size_t CACHE_THRESHOLD = 1024 * 1024;
+
 static bool send_data(sockfd_t sockfd, const void * data, size_t size) {
+    static std::unordered_set<uint64_t> sent_hashes;
+
+    if (size >= CACHE_THRESHOLD) {
+        uint64_t hash = generate_hash((const uint8_t*)data, size);
+        bool is_new = sent_hashes.find(hash) == sent_hashes.end();
+
+        uint8_t flag = is_new ? 1 : 0;
+        if (send(sockfd, (const char*)&flag, sizeof(flag), 0) != sizeof(flag)) {
+            return false;
+        }
+        if (send(sockfd, (const char*)&hash, sizeof(hash), 0) != sizeof(hash)) {
+            return false;
+        }
+
+        if (!is_new) {
+            return true;
+        }
+        sent_hashes.insert(hash);
+    }
+
     size_t bytes_sent = 0;
     while (bytes_sent < size) {
         size_t size_to_send = std::min(size - bytes_sent, MAX_CHUNK_SIZE);
@@ -444,6 +467,29 @@ static bool send_data(sockfd_t sockfd, const void * data, size_t size) {
 }
 
 static bool recv_data(sockfd_t sockfd, void * data, size_t size) {
+    static std::unordered_map<uint64_t, std::vector<uint8_t>> recv_cache;
+
+    uint64_t hash = 0;
+
+    if (size >= CACHE_THRESHOLD) {
+        uint8_t flag;
+        if (recv(sockfd, (char*)&flag, sizeof(flag), 0) != sizeof(flag)) {
+            return false;
+        }
+        if (recv(sockfd, (char*)&hash, sizeof(hash), 0) != sizeof(hash)) {
+            return false;
+        }
+
+        if (flag == 0) {
+            auto it = recv_cache.find(hash);
+            if (it != recv_cache.end()) {
+                memcpy(data, it->second.data(), size);
+                return true;
+            }
+            return false;
+        }
+    }
+
     size_t bytes_recv = 0;
     while (bytes_recv < size) {
         size_t size_to_recv = std::min(size - bytes_recv, MAX_CHUNK_SIZE);
@@ -459,6 +505,11 @@ static bool recv_data(sockfd_t sockfd, void * data, size_t size) {
         }
         bytes_recv += (size_t)n;
     }
+
+    if (size >= CACHE_THRESHOLD) {
+        recv_cache[hash] = std::vector<uint8_t>((uint8_t*)data, (uint8_t*)data + size);
+    }
+
     return true;
 }
 
