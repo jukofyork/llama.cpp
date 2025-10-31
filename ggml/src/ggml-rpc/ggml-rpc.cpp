@@ -441,8 +441,8 @@ static std::shared_ptr<socket_t> create_server_socket(const char * host, int por
 }
 
 // Try use the volatile cache when data size is larger than this threshold
-const size_t MIN_CACHE_THRESHOLD = 9999999; //(20 * 1024) + 1;
-const size_t MAX_CACHE_THRESHOLD = 0; //1024 * 1024;
+const size_t MIN_CACHE_THRESHOLD = 50 * 1024;
+const size_t MAX_CACHE_THRESHOLD = 1024 * 1024;
 
 static bool send_data(sockfd_t sockfd, const void * data, size_t size) {
     static std::unordered_set<uint64_t> sent_hashes;
@@ -450,7 +450,7 @@ static bool send_data(sockfd_t sockfd, const void * data, size_t size) {
     static uint8_t buffer[sizeof(uint8_t) + sizeof(uint64_t) + MAX_CACHE_THRESHOLD];
 
     if (size >= MIN_CACHE_THRESHOLD && size <= MAX_CACHE_THRESHOLD) {
-        uint64_t hash = fnv_hash((const uint8_t*)data, size);
+        uint64_t hash = generate_hash((const uint8_t*)data, size);
 
         size_t size_to_send = sizeof(uint8_t) + sizeof(uint64_t);
 
@@ -490,6 +490,18 @@ static bool send_data(sockfd_t sockfd, const void * data, size_t size) {
 static bool recv_data(sockfd_t sockfd, void * data, size_t size) {
     static std::unordered_map<uint64_t, std::vector<uint8_t>> recv_cache;
 
+    static uint8_t buffer[sizeof(uint8_t) + sizeof(uint64_t) + MAX_CACHE_THRESHOLD];
+    static size_t remaining = 0;
+
+    if (remaining > 0) {
+        remaining -= size;
+        memcpy(data, buffer, size);
+        if (remaining > 0) {
+            memcpy(buffer, buffer + size, remaining);
+        }
+        return true;
+    }
+
     uint64_t hash = 0;
 
     if (size >= MIN_CACHE_THRESHOLD && size <= MAX_CACHE_THRESHOLD) {
@@ -505,6 +517,10 @@ static bool recv_data(sockfd_t sockfd, void * data, size_t size) {
             auto it = recv_cache.find(hash);
             if (it != recv_cache.end()) {
                 memcpy(data, it->second.data(), size);
+                if (it->second.size() > size) {
+                    remaining = it->second.size() - size;
+                    memcpy(buffer, it->second.data() + size, remaining);
+                }
                 return true;
             }
             return false;
