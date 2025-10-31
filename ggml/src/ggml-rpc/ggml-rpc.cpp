@@ -441,8 +441,8 @@ static std::shared_ptr<socket_t> create_server_socket(const char * host, int por
 }
 
 // Try use the volatile cache when data size is larger than this threshold
-const size_t MIN_CACHE_THRESHOLD = (20 * 1024) + 1;
-const size_t MAX_CACHE_THRESHOLD = 1024 * 1024;
+const size_t MIN_CACHE_THRESHOLD = 9999999; //(20 * 1024) + 1;
+const size_t MAX_CACHE_THRESHOLD = 0; //1024 * 1024;
 
 static bool send_data(sockfd_t sockfd, const void * data, size_t size) {
     static std::unordered_set<uint64_t> sent_hashes;
@@ -535,19 +535,15 @@ static bool recv_data(sockfd_t sockfd, void * data, size_t size) {
 }
 
 static bool send_msg(sockfd_t sockfd, const void * msg, size_t msg_size) {
-    const size_t header_size = sizeof(msg_size);
     std::vector<uint8_t> buf;
-    buf.resize(header_size + msg_size);
+    buf.resize(sizeof(msg_size) + msg_size);
 
-    // header
     memcpy(buf.data(), &msg_size, sizeof(msg_size));
 
-    // payload
     if (msg_size > 0) {
-        memcpy(buf.data() + header_size, msg, msg_size);
+        memcpy(buf.data() + sizeof(msg_size), msg, msg_size);
     }
 
-    // single send
     return send_data(sockfd, buf.data(), buf.size());
 }
 
@@ -589,9 +585,8 @@ static bool parse_endpoint(const std::string & endpoint, std::string & host, int
 // RPC request : | rpc_cmd (1 byte) | request_size (8 bytes) | request_data (request_size bytes) |
 // No response
 static bool send_rpc_cmd(const std::shared_ptr<socket_t> & sock, enum rpc_cmd cmd, const void * input, size_t input_size) {
-    const size_t header_size = 1 + sizeof(input_size);
     std::vector<uint8_t> buf;
-    buf.resize(header_size + input_size);
+    buf.resize(1 + sizeof(input_size) + input_size);
 
     // header
     buf[0] = static_cast<uint8_t>(cmd);
@@ -599,7 +594,7 @@ static bool send_rpc_cmd(const std::shared_ptr<socket_t> & sock, enum rpc_cmd cm
 
     // payload
     if (input_size > 0) {
-        memcpy(buf.data() + header_size, input, input_size);
+        memcpy(buf.data() + 1 + sizeof(input_size), input, input_size);
     }
 
     // single send (send_data may still chunk very large buffers, which is fine)
