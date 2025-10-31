@@ -523,18 +523,10 @@ static bool recv_data(sockfd_t sockfd, void * data, size_t size) {
 }
 
 static bool send_msg(sockfd_t sockfd, const void * msg, size_t msg_size) {
-    const size_t header_size = sizeof(msg_size);
-    const size_t total_size = header_size + msg_size;
-    std::vector<uint64_t> aligned_buf((total_size + 7) / 8);  // 8-byte aligned
-    uint8_t* buf = reinterpret_cast<uint8_t*>(aligned_buf.data());
-
-    memcpy(buf, &msg_size, sizeof(msg_size));
-
-    if (msg_size > 0) {
-        memcpy(buf + header_size, msg, msg_size);
+    if (!send_data(sockfd, &msg_size, sizeof(msg_size))) {
+        return false;
     }
-
-    return send_data(sockfd, buf, header_size + msg_size);
+    return send_data(sockfd, msg, msg_size);
 }
 
 static bool recv_msg(sockfd_t sockfd, void * msg, size_t msg_size) {
@@ -575,19 +567,17 @@ static bool parse_endpoint(const std::string & endpoint, std::string & host, int
 // RPC request : | rpc_cmd (1 byte) | request_size (8 bytes) | request_data (request_size bytes) |
 // No response
 static bool send_rpc_cmd(const std::shared_ptr<socket_t> & sock, enum rpc_cmd cmd, const void * input, size_t input_size) {
-    const size_t header_size = 1 + sizeof(input_size);
-    const size_t total_size = header_size + input_size;
-    std::vector<uint64_t> aligned_buf((total_size + 7) / 8);  // 8-byte aligned
-    uint8_t* buf = reinterpret_cast<uint8_t*>(aligned_buf.data());
-
-    buf[0] = static_cast<uint8_t>(cmd);
-    memcpy(buf + 1, &input_size, sizeof(input_size));
-
-    if (input_size > 0) {
-        memcpy(buf + header_size, input, input_size);
+    uint8_t cmd_byte = cmd;
+    if (!send_data(sock->fd, &cmd_byte, sizeof(cmd_byte))) {
+        return false;
     }
-
-    return send_data(sock->fd, buf, total_size);
+    if (!send_data(sock->fd, &input_size, sizeof(input_size))) {
+        return false;
+    }
+    if (!send_data(sock->fd, input, input_size)) {
+        return false;
+    }
+    return true;
 }
 
 // RPC request : | rpc_cmd (1 byte) | request_size (8 bytes) | request_data (request_size bytes) |
