@@ -453,14 +453,10 @@ static bool send_data(sockfd_t sockfd, const void * data, size_t size) {
             sent_hashes.insert(hash);
         }
 
-        size_t bytes_sent = 0;
-        while (bytes_sent < size_to_send) {
-            ssize_t n = send(sockfd, (const char*)buffer + bytes_sent, size_to_send - bytes_sent, 0);
-            if (n < 0) {
-                GGML_LOG_ERROR("send failed (size_to_send=%zu)\n", size_to_send);
-                return false;
-            }
-            bytes_sent += (size_t)n;
+        ssize_t n = send(sockfd, (const char*)buffer, size_to_send, 0);
+        if (n < 0) {
+            GGML_LOG_ERROR("send failed (size_to_send=%zu)\n", size_to_send);
+            return false;
         }
         return true;
     }
@@ -528,19 +524,17 @@ static bool recv_data(sockfd_t sockfd, void * data, size_t size) {
 
 static bool send_msg(sockfd_t sockfd, const void * msg, size_t msg_size) {
     const size_t header_size = sizeof(msg_size);
-    std::vector<uint8_t> buf;
-    buf.resize(header_size + msg_size);
+    const size_t total_size = header_size + msg_size;
+    std::vector<uint64_t> aligned_buf((total_size + 7) / 8);  // 8-byte aligned
+    uint8_t* buf = reinterpret_cast<uint8_t*>(aligned_buf.data());
 
-    // header
-    memcpy(buf.data(), &msg_size, sizeof(msg_size));
+    memcpy(buf, &msg_size, sizeof(msg_size));
 
-    // payload
     if (msg_size > 0) {
-        memcpy(buf.data() + header_size, msg, msg_size);
+        memcpy(buf + header_size, msg, msg_size);
     }
 
-    // single send
-    return send_data(sockfd, buf.data(), buf.size());
+    return send_data(sockfd, buf, header_size + msg_size);
 }
 
 static bool recv_msg(sockfd_t sockfd, void * msg, size_t msg_size) {
@@ -582,20 +576,18 @@ static bool parse_endpoint(const std::string & endpoint, std::string & host, int
 // No response
 static bool send_rpc_cmd(const std::shared_ptr<socket_t> & sock, enum rpc_cmd cmd, const void * input, size_t input_size) {
     const size_t header_size = 1 + sizeof(input_size);
-    std::vector<uint8_t> buf;
-    buf.resize(header_size + input_size);
+    const size_t total_size = header_size + input_size;
+    std::vector<uint64_t> aligned_buf((total_size + 7) / 8);  // 8-byte aligned
+    uint8_t* buf = reinterpret_cast<uint8_t*>(aligned_buf.data());
 
-    // header
     buf[0] = static_cast<uint8_t>(cmd);
-    memcpy(buf.data() + 1, &input_size, sizeof(input_size));
+    memcpy(buf + 1, &input_size, sizeof(input_size));
 
-    // payload
     if (input_size > 0) {
-        memcpy(buf.data() + header_size, input, input_size);
+        memcpy(buf + header_size, input, input_size);
     }
 
-    // single send (send_data may still chunk very large buffers, which is fine)
-    return send_data(sock->fd, buf.data(), buf.size());
+    return send_data(sock->fd, buf, total_size);
 }
 
 // RPC request : | rpc_cmd (1 byte) | request_size (8 bytes) | request_data (request_size bytes) |
