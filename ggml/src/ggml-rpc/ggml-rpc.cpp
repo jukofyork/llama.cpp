@@ -491,14 +491,12 @@ static bool recv_data(sockfd_t sockfd, void * data, size_t size) {
     static std::unordered_map<uint64_t, std::vector<uint8_t>> recv_cache;
 
     static uint8_t buffer[sizeof(uint8_t) + sizeof(uint64_t) + MAX_CACHE_THRESHOLD];
-    static size_t remaining = 0;
+    static size_t start = 0;
+    static size_t end = 0;
 
-    if (remaining > 0) {
-        remaining -= size;
-        memcpy(data, buffer, size);
-        if (remaining > 0) {
-            memcpy(buffer, buffer + size, remaining);
-        }
+    if (end - start > 0) {
+        memcpy(data, buffer + start, size);
+        start += size;
         return true;
     }
 
@@ -518,8 +516,9 @@ static bool recv_data(sockfd_t sockfd, void * data, size_t size) {
             if (it != recv_cache.end()) {
                 memcpy(data, it->second.data(), size);
                 if (it->second.size() > size) {
-                    remaining = it->second.size() - size;
-                    memcpy(buffer, it->second.data() + size, remaining);
+                    start = 0;
+                    end = it->second.size() - size;
+                    memcpy(buffer, it->second.data() + size, end);
                 }
                 return true;
             }
