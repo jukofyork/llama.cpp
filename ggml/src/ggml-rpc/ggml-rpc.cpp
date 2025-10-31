@@ -453,10 +453,14 @@ static bool send_data(sockfd_t sockfd, const void * data, size_t size) {
             sent_hashes.insert(hash);
         }
 
-        ssize_t n = send(sockfd, (const char*)buffer, size_to_send, 0);
-        if (n < 0) {
-            GGML_LOG_ERROR("send failed (size_to_send=%zu)\n", size_to_send);
-            return false;
+        size_t bytes_sent = 0;
+        while (bytes_sent < size_to_send) {
+            ssize_t n = send(sockfd, (const char*)buffer + bytes_sent, size_to_send - bytes_sent, 0);
+            if (n < 0) {
+                GGML_LOG_ERROR("send failed (size_to_send=%zu)\n", size_to_send);
+                return false;
+            }
+            bytes_sent += (size_t)n;
         }
         return true;
     }
